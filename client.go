@@ -2,7 +2,6 @@ package vistar
 
 import (
 	"bytes"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -21,9 +20,9 @@ type AdResponse struct {
 }
 
 type Client interface {
-	GetAd(context.Context, AdConfig, *AdRequest) (*AdResponse, error)
-	Expire(context.Context, string) error
-	Confirm(context.Context, string, int64) error
+	GetAd(AdConfig, *AdRequest) (*AdResponse, error)
+	Expire(string) error
+	Confirm(string, int64) error
 }
 
 type client struct {
