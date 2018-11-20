@@ -29,7 +29,7 @@ func TestCacheAdsNoCacher(t *testing.T) {
 		},
 	}
 
-	client := NewClient(nil, nil, time.Second*1, time.Minute*1)
+	client := NewClient(time.Second*1, nil, nil, time.Minute*1)
 
 	client.cacheAds(resp)
 
@@ -76,7 +76,7 @@ func TestCacheAds(t *testing.T) {
 			level:   level})
 	}
 
-	client := NewClient(cacheFn, eventFn, time.Second*1, time.Second*1)
+	client := NewClient(time.Second*1, eventFn, cacheFn, time.Second*1)
 
 	cacheError := errors.New("cache failed")
 	cacheEntry := "/cached-url"

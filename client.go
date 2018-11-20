@@ -35,8 +35,8 @@ type client struct {
 	inProgressAds map[string]Ad
 }
 
-func NewClient(cacheFn CacheFunc, eventFn EventFunc,
-	reqTimeout time.Duration, assetTTL time.Duration) *client {
+func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
+	assetTTL time.Duration) *client {
 	httpClient := &http.Client{Timeout: reqTimeout}
 	pop := NewProofOfPlay(eventFn)
 	return &client{
