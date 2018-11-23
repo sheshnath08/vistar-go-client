@@ -26,6 +26,7 @@ type Client interface {
 	GetAd(AdConfig, *AdRequest) (*AdResponse, error)
 	Expire(string) error
 	Confirm(string, int64) error
+	GetInProgressAds() map[string]Ad
 }
 
 type client struct {
@@ -50,6 +51,17 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 		cacheFn:       cacheFn,
 		inProgressAds: make(map[string]Ad),
 	}
+}
+
+func (c *client) GetInProgressAds() map[string]Ad {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	ret := map[string]Ad{}
+	for k, v := range c.inProgressAds {
+		ret[k] = v
+	}
+	return ret
 }
 
 func (c *client) Expire(adId string) error {
