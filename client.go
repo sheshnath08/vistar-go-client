@@ -3,6 +3,7 @@ package vistar
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -10,6 +11,8 @@ import (
 	"sync"
 	"time"
 )
+
+var AdNotFound = errors.New("ad not found")
 
 type CacheFunc func(string, time.Duration) (string, error)
 type EventFunc func(string, string, string, string)
@@ -50,10 +53,22 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 }
 
 func (c *client) Expire(adId string) error {
+	ad, ok := c.removeFromInProgressList(adId)
+	if !ok {
+		return AdNotFound
+	}
+
+	c.pop.Expire(ad)
 	return nil
 }
 
 func (c *client) Confirm(adId string, displayTime int64) error {
+	ad, ok := c.removeFromInProgressList(adId)
+	if !ok {
+		return AdNotFound
+	}
+
+	c.pop.Confirm(ad, displayTime)
 	return nil
 }
 
