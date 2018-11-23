@@ -180,6 +180,7 @@ func (c *client) addToInProgressList(ad Ad) {
 	defer c.lock.Unlock()
 
 	adId := ad["id"].(string)
+	log.Printf("Adding ad to the list: %s", adId)
 	c.inProgressAds[adId] = ad
 }
 
@@ -188,6 +189,7 @@ func (c *client) removeFromInProgressList(adId string) (Ad, bool) {
 	defer c.lock.Unlock()
 
 	ad, ok := c.inProgressAds[adId]
+	log.Printf("Removing ad from the list: %s: [%t - %v]", adId, ok, ad)
 	delete(c.inProgressAds, adId)
 	return ad, ok
 }
