@@ -90,18 +90,19 @@ func TestParseBool(t *testing.T) {
 
 func TestParse(t *testing.T) {
 	params := map[string]string{
-		"vistar.url":               "staging-url",
-		"vistar.api_key":           "api-key",
-		"vistar.network_id":        "network-id",
-		"vistar.venue_id":          "venue-id",
-		"vistar.direct_connection": "true",
-		"vistar.latitude":          "45.5",
-		"vistar.longitude":         "44.4",
-		"vistar.mime_types":        "a,b,c",
-		"vistar.width":             "100",
-		"vistar.height":            "200",
-		"vistar.allow_audio":       "true",
-		"vistar.static_duration":   "9",
+		"vistar.url":                 "staging-url",
+		"vistar.api_key":             "api-key",
+		"vistar.network_id":          "network-id",
+		"vistar.venue_id":            "venue-id",
+		"vistar.direct_connection":   "true",
+		"vistar.latitude":            "45.5",
+		"vistar.longitude":           "44.4",
+		"vistar.mime_types":          "a,b,c",
+		"vistar.width":               "100",
+		"vistar.height":              "200",
+		"vistar.allow_audio":         "true",
+		"vistar.static_duration":     "9",
+		"vistar.required_completion": "9",
 	}
 
 	conf := &adConfig{}
@@ -113,6 +114,7 @@ func TestParse(t *testing.T) {
 	assert.Equal(t, conf.baseRequest.DeviceId, "venue-id")
 	assert.Equal(t, conf.baseRequest.VenueId, "venue-id")
 	assert.True(t, conf.baseRequest.DirectConnection)
+	assert.Equal(t, conf.baseRequest.RequiredCompletion, 9.0)
 	assert.Equal(t, conf.baseRequest.Latitude, 45.5)
 	assert.Equal(t, conf.baseRequest.Longitude, 44.4)
 	assert.Equal(t, conf.baseRequest.DisplayTime, int64(0))
@@ -130,18 +132,19 @@ func TestParse(t *testing.T) {
 
 func TestUpdateAdRequest(t *testing.T) {
 	params := map[string]string{
-		"vistar.url":               "staging-url",
-		"vistar.api_key":           "api-key",
-		"vistar.network_id":        "network-id",
-		"vistar.venue_id":          "venue-id",
-		"vistar.direct_connection": "true",
-		"vistar.latitude":          "45.5",
-		"vistar.longitude":         "44.4",
-		"vistar.mime_types":        "a,b,c",
-		"vistar.width":             "100",
-		"vistar.height":            "200",
-		"vistar.allow_audio":       "true",
-		"vistar.static_duration":   "9",
+		"vistar.url":                 "staging-url",
+		"vistar.api_key":             "api-key",
+		"vistar.network_id":          "network-id",
+		"vistar.venue_id":            "venue-id",
+		"vistar.direct_connection":   "true",
+		"vistar.latitude":            "45.5",
+		"vistar.longitude":           "44.4",
+		"vistar.mime_types":          "a,b,c",
+		"vistar.width":               "100",
+		"vistar.height":              "200",
+		"vistar.allow_audio":         "true",
+		"vistar.static_duration":     "9",
+		"vistar.required_completion": "9",
 	}
 
 	conf := &adConfig{}
@@ -168,6 +171,7 @@ func TestUpdateAdRequest(t *testing.T) {
 	assert.Equal(t, req.Latitude, 45.5)
 	assert.Equal(t, req.Longitude, 44.4)
 	assert.NotEqual(t, req.DisplayTime, int64(0))
+	assert.Equal(t, req.RequiredCompletion, 9.0)
 	assert.Equal(t, req.NumberOfScreens, int64(1))
 	assert.Len(t, req.DisplayAreas, 1)
 	assert.Len(t, req.DeviceAttributes, 4)
