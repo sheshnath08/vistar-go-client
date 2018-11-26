@@ -29,17 +29,18 @@ type DeviceAttribute struct {
 }
 
 type AdRequest struct {
-	ApiKey           string            `json:"api_key"`
-	NetworkId        string            `json:"network_id"`
-	DeviceId         string            `json:"device_id"`
-	VenueId          string            `json:"venue_id"`
-	DirectConnection bool              `json:"direct_connection"`
-	Latitude         float64           `json:"latitude,omitempty"`
-	Longitude        float64           `json:"longitude,omitempty"`
-	DisplayTime      int64             `json:"display_time"`
-	NumberOfScreens  int64             `json:"number_of_screens"`
-	DisplayAreas     []DisplayArea     `json:"display_area"`
-	DeviceAttributes []DeviceAttribute `json:"device_attribute"`
+	ApiKey             string            `json:"api_key"`
+	NetworkId          string            `json:"network_id"`
+	DeviceId           string            `json:"device_id"`
+	VenueId            string            `json:"venue_id"`
+	RequiredCompletion float64           `json:"required_completion"`
+	DirectConnection   bool              `json:"direct_connection"`
+	Latitude           float64           `json:"latitude,omitempty"`
+	Longitude          float64           `json:"longitude,omitempty"`
+	DisplayTime        int64             `json:"display_time"`
+	NumberOfScreens    int64             `json:"number_of_screens"`
+	DisplayAreas       []DisplayArea     `json:"display_area"`
+	DeviceAttributes   []DeviceAttribute `json:"device_attribute"`
 }
 
 type AdConfig interface {
@@ -76,6 +77,7 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 	req.Latitude = c.baseRequest.Latitude
 	req.Longitude = c.baseRequest.Longitude
 	req.NumberOfScreens = c.baseRequest.NumberOfScreens
+	req.RequiredCompletion = c.baseRequest.RequiredCompletion
 	req.DisplayTime = time.Now().Unix()
 
 	if len(req.DisplayAreas) == 0 {
@@ -110,6 +112,7 @@ func (c *adConfig) parse(params DeviceParams) {
 	req.DirectConnection = c.parseBool(params, "vistar.direct_connection", false)
 	req.Latitude = c.parseFloat(params, "vistar.latitude", 0)
 	req.Longitude = c.parseFloat(params, "vistar.longitude", 0)
+	req.RequiredCompletion = c.parseFloat(params, "vistar.required_completion", 1)
 	req.NumberOfScreens = 1
 
 	mimeTypes := c.parseArray(params, "vistar.mime_types", DefaultMimeTypes)
