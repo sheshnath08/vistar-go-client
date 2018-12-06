@@ -4,7 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"errors"
-	"log"
+	"fmt"
 	"net/http"
 	"time"
 
@@ -79,12 +79,16 @@ func (p *proofOfPlay) start() {
 		if req.Status {
 			err := p.confirm(req.Ad, req.DisplayTime)
 			if err != nil {
-				p.publishEvent("ad-pop-failed", err.Error(), "critical")
+				p.publishEvent("ad-pop-failed",
+					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
+					"critical")
 			}
 		} else {
 			err := p.expire(req.Ad)
 			if err != nil {
-				p.publishEvent("ad-expire-failed", err.Error(), "critical")
+				p.publishEvent("ad-expire-failed",
+					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
+					"critical")
 			}
 		}
 	}
@@ -106,15 +110,12 @@ func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
 
 	data, err := json.Marshal(&ProofOfPlayRequest{DisplayTime: displayTime})
 	if err != nil {
-		log.Printf("Unable to make http confirm call. err: %v", err)
 		return err
 	}
 
 	return try.Do(func(attempt int) (bool, error) {
-		log.Printf("Trying to confirm ad %s", ad["id"])
 		req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
 		if err != nil {
-			log.Printf("Unable to prepare http confirm call. err: %v", err)
 			return false, nil
 		}
 
@@ -135,10 +136,8 @@ func (p *proofOfPlay) expire(ad Ad) error {
 	}
 
 	return try.Do(func(attempt int) (bool, error) {
-		log.Printf("Trying to expire ad %s", ad["id"])
 		req, err := http.NewRequest("GET", expUrl, nil)
 		if err != nil {
-			log.Printf("Unable to prepare http expire call. err: %v", err)
 			return false, nil
 		}
 

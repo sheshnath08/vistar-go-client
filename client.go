@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
-	"log"
 	"net/http"
 	"sync"
 	"time"
@@ -149,8 +148,9 @@ func (c *client) cacheAds(resp *AdResponse) {
 			defer wg.Done()
 			local, err := c.cacheFn(originalUrl, c.assetTTL)
 			if err != nil {
-				log.Printf("Unable to cache asset %s, err: %v", originalUrl, err)
-				c.publishEvent("app-cache-failed", originalUrl, "warning")
+				c.publishEvent("app-cache-failed",
+					fmt.Sprintf("url: %s, error: %s", originalUrl, err.Error()),
+					"warning")
 				ad["should_expire"] = true
 				return
 			}

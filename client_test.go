@@ -97,7 +97,6 @@ func TestCacheAds(t *testing.T) {
 
 		assert.Len(t, eventCalls, 1)
 		assert.Equal(t, eventCalls[0].name, "app-cache-failed")
-		assert.Equal(t, eventCalls[0].message, "url1")
 		done <- true
 	}()
 
