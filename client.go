@@ -24,7 +24,7 @@ type AdResponse struct {
 type Client interface {
 	GetAd(AdConfig, *AdRequest) (*AdResponse, error)
 	Expire(string) error
-	Confirm(string, int64) error
+	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
 }
 
@@ -73,14 +73,14 @@ func (c *client) Expire(adId string) error {
 	return nil
 }
 
-func (c *client) Confirm(adId string, displayTime int64) error {
+func (c *client) Confirm(adId string, displayTime int64) (string, error) {
 	ad, ok := c.removeFromInProgressList(adId)
 	if !ok {
-		return AdNotFound
+		return "", AdNotFound
 	}
 
 	c.pop.Confirm(ad, displayTime)
-	return nil
+	return ad["original_asset_url"].(string), nil
 }
 
 func (c *client) GetAd(config AdConfig, req *AdRequest) (
