@@ -31,7 +31,7 @@ type Client interface {
 	Expire(string) error
 	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
-	GetAssets(AdConfig, *AdResponse) (*AssetResponse, error)
+	GetAssets(AdConfig, *AdRequest) (*AssetResponse, error)
 }
 
 type client struct {
