@@ -21,11 +21,17 @@ type AdResponse struct {
 	Advertisement []Ad `json:"advertisement,omitempty"`
 }
 
+type Asset map[string]interface{}
+type AssetResponse struct {
+	Assets []Asset `json:"asset,omitempty"`
+}
+
 type Client interface {
 	GetAd(AdConfig, *AdRequest) (*AdResponse, error)
 	Expire(string) error
 	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
+	GetAssets(AdConfig, *AdResponse) (*AssetResponse, error)
 }
 
 type client struct {
@@ -85,13 +91,59 @@ func (c *client) Confirm(adId string, displayTime int64) (string, error) {
 
 func (c *client) GetAd(config AdConfig, req *AdRequest) (
 	*AdResponse, error) {
+	body, err := c.post(config.ServerUrl(), config, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &AdResponse{}
+	err = json.Unmarshal(body, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.Advertisement) == 0 {
+		c.publishEvent("ad-server-returned-no-ads", "", "warning")
+		return resp, nil
+	}
+
+	if c.cacheFn == nil {
+		return resp, nil
+	}
+
+	c.cacheAds(resp)
+	cleanedResponse := c.tryToExpireAds(resp)
+	return cleanedResponse, nil
+}
+
+func (c *client) GetAssets(config AdConfig, req *AdRequest) (
+	*AssetResponse, error) {
+	body, err := c.post(config.AssetEndpointUrl(), config, req)
+	if err != nil {
+		return nil, err
+	}
+
+	resp := &AssetResponse{}
+	err = json.Unmarshal(body, resp)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(resp.Assets) == 0 {
+		c.publishEvent("ad-server-returned-no-assets", "", "warning")
+	}
+
+	return resp, nil
+}
+
+func (c *client) post(url string, config AdConfig, req *AdRequest) (
+	[]byte, error) {
 	data, err := json.Marshal(req)
 	if err != nil {
 		return nil, err
 	}
 
-	hreq, err := http.NewRequest("POST", config.ServerUrl(),
-		bytes.NewBuffer(data))
+	hreq, err := http.NewRequest("POST", url, bytes.NewBuffer(data))
 	if err != nil {
 		return nil, err
 	}
@@ -109,31 +161,15 @@ func (c *client) GetAd(config AdConfig, req *AdRequest) (
 	}
 
 	if resp.StatusCode >= http.StatusBadRequest {
-		c.publishEvent("ad-server-request-failed",
-			fmt.Sprintf("code: %d, body: %s", resp.StatusCode, string(body)),
+		c.publishEvent(
+			"ad-server-endpoint-failed",
+			fmt.Sprintf("url: %s, code: %d, body: %s", url, resp.StatusCode,
+				string(body)),
 			"warning")
-		return nil, fmt.Errorf("Ad server returned an error. code: %d, body: %s",
-			resp.StatusCode, string(body))
+		return nil, fmt.Errorf("Ad server returned an error. url: %s, "+
+			"code: %d, body: %s", url, resp.StatusCode, string(body))
 	}
-
-	adResponse := &AdResponse{}
-	err = json.Unmarshal(body, adResponse)
-	if err != nil {
-		return nil, err
-	}
-
-	if len(adResponse.Advertisement) == 0 {
-		c.publishEvent("ad-server-returned-no-ads", "", "warning")
-		return adResponse, nil
-	}
-
-	if c.cacheFn == nil {
-		return adResponse, nil
-	}
-
-	c.cacheAds(adResponse)
-	cleanedResponse := c.tryToExpireAds(adResponse)
-	return cleanedResponse, nil
+	return body, err
 }
 
 func (c *client) cacheAds(resp *AdResponse) {

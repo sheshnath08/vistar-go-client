@@ -1,6 +1,7 @@
 package vistar
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 	"time"
@@ -10,6 +11,11 @@ var UserAgent = "VistarGoClient"
 
 var DefaultMimeTypes = []string{
 	"image/gif", "image/jpeg", "image/png", "video/mp4",
+}
+
+type Dimension struct {
+	Width  int64
+	Height int64
 }
 
 type DeviceParams map[string]string
@@ -47,11 +53,15 @@ type AdConfig interface {
 	NewAdRequest() *AdRequest
 	UpdateAdRequest(*AdRequest)
 	ServerUrl() string
+	AssetEndpointUrl() string
+	AssetEndpointDisplayAreas() []DisplayArea
 }
 
 type adConfig struct {
-	baseRequest *AdRequest
-	url         string
+	baseRequest               *AdRequest
+	url                       string
+	assetEndpointUrl          string
+	assetEndpointDisplayAreas []DisplayArea
 }
 
 func NewAdConfig(params DeviceParams) *adConfig {
@@ -66,6 +76,14 @@ func (c *adConfig) NewAdRequest() *AdRequest {
 
 func (c adConfig) ServerUrl() string {
 	return c.url
+}
+
+func (c adConfig) AssetEndpointUrl() string {
+	return c.assetEndpointUrl
+}
+
+func (c adConfig) AssetEndpointDisplayAreas() []DisplayArea {
+	return c.assetEndpointDisplayAreas
 }
 
 func (c *adConfig) UpdateAdRequest(req *AdRequest) {
@@ -103,6 +121,7 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 
 func (c *adConfig) parse(params DeviceParams) {
 	c.url = params["vistar.url"]
+	c.assetEndpointUrl = params["vistar.asset_cache_endpoint"]
 
 	req := AdRequest{}
 	req.ApiKey = params["vistar.api_key"]
@@ -134,7 +153,29 @@ func (c *adConfig) parse(params DeviceParams) {
 	req.DisplayAreas[0].StaticDuration = c.parseInt(params,
 		"vistar.static_duration", 0)
 
+	c.assetEndpointDisplayAreas = c.parseAssetEndpointDisplayAreas(params,
+		req.DisplayAreas[0].AllowAudio, mimeTypes)
+
 	c.baseRequest = &req
+}
+
+func (c adConfig) parseAssetEndpointDisplayAreas(params DeviceParams,
+	allowAudio bool, mimeTypes []string) []DisplayArea {
+	areas := make([]DisplayArea, 0, 0)
+	sval, ok := params["vistar.creative_sizes"]
+	if !ok {
+		return areas
+	}
+
+	for idx, dimension := range c.parseDimensionString(sval) {
+		areas = append(areas, DisplayArea{
+			Id:             fmt.Sprintf("display-%d", idx),
+			Width:          dimension.Width,
+			Height:         dimension.Height,
+			AllowAudio:     allowAudio,
+			SupportedMedia: mimeTypes})
+	}
+	return areas
 }
 
 func (c adConfig) parseArray(params DeviceParams, name string,
@@ -200,4 +241,33 @@ func (c adConfig) parseBool(params DeviceParams, name string, def bool) bool {
 	}
 
 	return val
+}
+
+func (c adConfig) parseDimensionString(val string) []Dimension {
+	res := make([]Dimension, 0, 0)
+	for _, part := range strings.Split(val, ",") {
+		trimmed := strings.TrimSpace(part)
+		if trimmed == "" {
+			continue
+		}
+
+		widthAndHeight := strings.Split(part, "x")
+		if len(widthAndHeight) != 2 {
+			continue
+		}
+
+		w, err := strconv.ParseInt(strings.TrimSpace(widthAndHeight[0]), 10, 64)
+		if err != nil {
+			continue
+		}
+
+		h, err := strconv.ParseInt(strings.TrimSpace(widthAndHeight[1]), 10, 64)
+		if err != nil {
+			continue
+		}
+
+		res = append(res, Dimension{Width: w, Height: h})
+	}
+
+	return res
 }

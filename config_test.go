@@ -182,3 +182,67 @@ func TestUpdateAdRequest(t *testing.T) {
 	assert.Equal(t, req.DisplayAreas[0].SupportedMedia, []string{"image"})
 	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
 }
+
+func TestParseDimensionString(t *testing.T) {
+	conf := &adConfig{}
+	dims := conf.parseDimensionString("")
+	assert.Equal(t, len(dims), 0)
+	dims = conf.parseDimensionString("1,2")
+	assert.Equal(t, len(dims), 0)
+	dims = conf.parseDimensionString(",")
+	assert.Equal(t, len(dims), 0)
+	dims = conf.parseDimensionString("axb")
+	assert.Equal(t, len(dims), 0)
+	dims = conf.parseDimensionString("100x200")
+	assert.Equal(t, len(dims), 1)
+	assert.Equal(t, dims[0], Dimension{Width: 100, Height: 200})
+	dims = conf.parseDimensionString("100x200,")
+	assert.Equal(t, len(dims), 1)
+	assert.Equal(t, dims[0], Dimension{Width: 100, Height: 200})
+	dims = conf.parseDimensionString("100x 200  , ,,")
+	assert.Equal(t, len(dims), 1)
+	assert.Equal(t, dims[0], Dimension{Width: 100, Height: 200})
+	dims = conf.parseDimensionString("100x 200  , ,100x,")
+	assert.Equal(t, len(dims), 1)
+	assert.Equal(t, dims[0], Dimension{Width: 100, Height: 200})
+	dims = conf.parseDimensionString("100x 200  , ,300x500,")
+	assert.Equal(t, len(dims), 2)
+	assert.Equal(t, dims[0], Dimension{Width: 100, Height: 200})
+	assert.Equal(t, dims[1], Dimension{Width: 300, Height: 500})
+}
+
+func TestParseAssetEndpointDisplayAreas(t *testing.T) {
+	conf := &adConfig{}
+	params := map[string]string{
+		"vistar.url":        "staging-url",
+		"vistar.mime_types": "a,b,c",
+	}
+	areas := conf.parseAssetEndpointDisplayAreas(params, true, []string{"a"})
+	assert.Equal(t, len(areas), 0)
+
+	params = map[string]string{
+		"vistar.url":            "staging-url",
+		"vistar.creative_sizes": "a,b,c",
+	}
+	areas = conf.parseAssetEndpointDisplayAreas(params, true, []string{"a"})
+	assert.Equal(t, len(areas), 0)
+
+	params = map[string]string{
+		"vistar.url":            "staging-url",
+		"vistar.creative_sizes": "100x200,300x  500",
+	}
+	areas = conf.parseAssetEndpointDisplayAreas(params, true, []string{"a"})
+	assert.Equal(t, len(areas), 2)
+	assert.Equal(t, areas[0], DisplayArea{
+		Width:          100,
+		Height:         200,
+		Id:             "display-0",
+		AllowAudio:     true,
+		SupportedMedia: []string{"a"}})
+	assert.Equal(t, areas[1], DisplayArea{
+		Width:          300,
+		Height:         500,
+		Id:             "display-1",
+		AllowAudio:     true,
+		SupportedMedia: []string{"a"}})
+}
