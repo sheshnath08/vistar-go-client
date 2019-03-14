@@ -22,6 +22,7 @@ type ProofOfPlayRequest struct {
 type ProofOfPlay interface {
 	Expire(Ad)
 	Confirm(Ad, int64)
+	Stop()
 }
 
 type PoPRequest struct {
@@ -40,6 +41,9 @@ func NewTestProofOfPlay() *testProofOfPlay {
 
 func (t *testProofOfPlay) Expire(ad Ad) {
 	t.requests = append(t.requests, &PoPRequest{Ad: ad, Status: false})
+}
+
+func (t *testProofOfPlay) Stop() {
 }
 
 func (t *testProofOfPlay) Confirm(ad Ad, displayTime int64) {
@@ -64,6 +68,10 @@ func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
 	}
 	go pop.start()
 	return pop
+}
+
+func (p *proofOfPlay) Stop() {
+	close(p.requests)
 }
 
 func (p *proofOfPlay) Expire(ad Ad) {

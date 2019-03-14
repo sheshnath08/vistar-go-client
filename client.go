@@ -32,6 +32,7 @@ type Client interface {
 	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
 	GetAssets(AdConfig, *AdRequest) (*AssetResponse, error)
+	Close()
 }
 
 type client struct {
@@ -56,6 +57,10 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 		cacheFn:       cacheFn,
 		inProgressAds: make(map[string]Ad),
 	}
+}
+
+func (c *client) Close() {
+	c.pop.Stop()
 }
 
 func (c *client) GetInProgressAds() map[string]Ad {
