@@ -133,7 +133,8 @@ func (c *adConfig) parse(params DeviceParams) {
 	c.url = params["vistar.url"]
 	c.assetEndpointUrl = params["vistar.asset_cache_endpoint"]
 	c.logEnabled = c.parseBool(params, "cortex.log_enabled", false)
-	c.logLevel = c.parseInt(params, "cortex.log_level", 0)
+	// 0 = debug, 1 = info, 2 = warn, 3 = error
+	c.logLevel = c.parseInt(params, "cortex.log_level", 2)
 
 	req := AdRequest{}
 	req.ApiKey = params["vistar.api_key"]
