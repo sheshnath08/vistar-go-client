@@ -62,6 +62,8 @@ type adConfig struct {
 	url                       string
 	assetEndpointUrl          string
 	assetEndpointDisplayAreas []DisplayArea
+	logEnabled                bool
+	logLevel                  int64
 }
 
 func NewAdConfig(params DeviceParams) *adConfig {
@@ -72,6 +74,14 @@ func NewAdConfig(params DeviceParams) *adConfig {
 
 func (c *adConfig) NewAdRequest() *AdRequest {
 	return c.baseRequest
+}
+
+func (c adConfig) LogEnabled() bool {
+	return c.logEnabled
+}
+
+func (c adConfig) LogLevel() int64 {
+	return c.logLevel
 }
 
 func (c adConfig) ServerUrl() string {
@@ -122,6 +132,8 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 func (c *adConfig) parse(params DeviceParams) {
 	c.url = params["vistar.url"]
 	c.assetEndpointUrl = params["vistar.asset_cache_endpoint"]
+	c.logEnabled = c.parseBool(params, "cortex.log_enabled", false)
+	c.logLevel = c.parseInt(params, "cortex.log_level", 0)
 
 	req := AdRequest{}
 	req.ApiKey = params["vistar.api_key"]
