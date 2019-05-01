@@ -47,6 +47,8 @@ type AdRequest struct {
 	NumberOfScreens    int64             `json:"number_of_screens"`
 	DisplayAreas       []DisplayArea     `json:"display_area"`
 	DeviceAttributes   []DeviceAttribute `json:"device_attribute"`
+	Duration           int64             `json:"duration,omitempty"`
+	Interval           int64             `json:"interval,omitempty"`
 }
 
 type AdConfig interface {
@@ -106,6 +108,8 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 	req.Longitude = c.baseRequest.Longitude
 	req.NumberOfScreens = c.baseRequest.NumberOfScreens
 	req.RequiredCompletion = c.baseRequest.RequiredCompletion
+	req.Duration = c.baseRequest.Duration
+	req.Interval = c.baseRequest.Interval
 	req.DisplayTime = time.Now().Unix()
 
 	if len(req.DisplayAreas) == 0 {
@@ -146,6 +150,14 @@ func (c *adConfig) parse(params DeviceParams) {
 	req.Longitude = c.parseFloat(params, "vistar.longitude", 0)
 	req.RequiredCompletion = c.parseFloat(params, "vistar.required_completion", 1)
 	req.NumberOfScreens = 1
+
+	if params["vistar.duration"] != "" {
+		req.Duration = c.parseInt(params, "vistar.duration", 0)
+	}
+
+	if params["vistar.interval"] != "" {
+		req.Interval = c.parseInt(params, "vistar.interval", 0)
+	}
 
 	mimeTypes := c.parseArray(params, "vistar.mime_types", DefaultMimeTypes)
 	req.DeviceAttributes = []DeviceAttribute{
