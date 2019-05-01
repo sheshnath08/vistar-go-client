@@ -150,14 +150,8 @@ func (c *adConfig) parse(params DeviceParams) {
 	req.Longitude = c.parseFloat(params, "vistar.longitude", 0)
 	req.RequiredCompletion = c.parseFloat(params, "vistar.required_completion", 1)
 	req.NumberOfScreens = 1
-
-	if params["vistar.duration"] != "" {
-		req.Duration = c.parseInt(params, "vistar.duration", 0)
-	}
-
-	if params["vistar.interval"] != "" {
-		req.Interval = c.parseInt(params, "vistar.interval", 0)
-	}
+	req.Duration = c.parseInt(params, "vistar.duration", 0)
+	req.Interval = c.parseInt(params, "vistar.interval", 0)
 
 	mimeTypes := c.parseArray(params, "vistar.mime_types", DefaultMimeTypes)
 	req.DeviceAttributes = []DeviceAttribute{
