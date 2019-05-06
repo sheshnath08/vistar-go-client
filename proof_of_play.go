@@ -14,6 +14,7 @@ import (
 var PoPRequestTimeout = 2000 * time.Millisecond
 var PoPRetryDelaySecs = 10 * time.Second
 var PoPNumRetries = 3
+var FailedRetryTimeout = 60000 * time.Millisecond
 
 type ProofOfPlayRequest struct {
 	DisplayTime int64 `json:"display_time"`
@@ -32,7 +33,8 @@ type PoPRequest struct {
 }
 
 type testProofOfPlay struct {
-	requests []*PoPRequest
+	requests   []*PoPRequest
+	retryQueue []*PoPRequest
 }
 
 func NewTestProofOfPlay() *testProofOfPlay {
@@ -54,19 +56,22 @@ func (t *testProofOfPlay) Confirm(ad Ad, displayTime int64) {
 }
 
 type proofOfPlay struct {
+	eventFn    EventFunc
 	httpClient *http.Client
 	requests   chan *PoPRequest
-	eventFn    EventFunc
+	retryQueue []*PoPRequest
 }
 
 func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
 	httpClient := &http.Client{Timeout: PoPRequestTimeout}
 	pop := &proofOfPlay{
 		eventFn:    eventFn,
-		requests:   make(chan *PoPRequest, 100),
 		httpClient: httpClient,
+		requests:   make(chan *PoPRequest, 100),
+		retryQueue: make([]*PoPRequest, 0),
 	}
 	go pop.start()
+	pop.startFailedPoPTimer()
 	return pop
 }
 
@@ -87,16 +92,20 @@ func (p *proofOfPlay) start() {
 		if req.Status {
 			err := p.confirm(req.Ad, req.DisplayTime)
 			if err != nil {
-				p.publishEvent("ad-pop-failed",
+				p.publishEvent(
+					"ad-pop-failed",
 					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
-					"critical")
+					"warning")
+				p.retryQueue = append(p.retryQueue, req)
 			}
 		} else {
 			err := p.expire(req.Ad)
 			if err != nil {
-				p.publishEvent("ad-expire-failed",
+				p.publishEvent(
+					"ad-expire-failed",
 					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
-					"critical")
+					"warning")
+				p.retryQueue = append(p.retryQueue, req)
 			}
 		}
 	}
@@ -157,4 +166,52 @@ func (p *proofOfPlay) expire(ad Ad) error {
 		defer resp.Body.Close()
 		return false, nil
 	})
+}
+
+func isLeaseExpired(ad Ad) bool {
+	exp, ok := ad["lease_expiry"].(float64)
+	if !ok {
+		return true
+	}
+
+	expiry := int64(exp)
+	now := int64(time.Now().Unix())
+	return now >= expiry
+}
+
+func (p *proofOfPlay) retryFailedPoPs() {
+	if len(p.retryQueue) == 0 {
+		p.startFailedPoPTimer()
+		return
+	}
+
+	queue := p.retryQueue
+	p.retryQueue = make([]*PoPRequest, 0)
+
+	for len(queue) > 0 {
+		req := queue[0]
+		queue = queue[1:]
+
+		if isLeaseExpired(req.Ad) {
+			popType := "pop"
+			if !req.Status {
+				popType = "expire"
+			}
+
+			p.publishEvent(
+				fmt.Sprintf("ad-%s-already-expired", popType),
+				fmt.Sprintf("ad: %s, expiry: %d", req.Ad["id"], req.Ad["lease_expiry"]),
+				"critical",
+			)
+			continue
+		}
+
+		p.requests <- req
+	}
+
+	p.startFailedPoPTimer()
+}
+
+func (p *proofOfPlay) startFailedPoPTimer() {
+	time.AfterFunc(FailedRetryTimeout, p.retryFailedPoPs)
 }
