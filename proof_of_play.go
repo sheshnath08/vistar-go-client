@@ -15,6 +15,7 @@ var PoPRequestTimeout = 2000 * time.Millisecond
 var PoPRetryDelaySecs = 10 * time.Second
 var PoPNumRetries = 3
 var FailedRetryTimeout = 60000 * time.Millisecond
+var MaxRetryQueueSize = 20
 
 type ProofOfPlayRequest struct {
 	DisplayTime int64 `json:"display_time"`
@@ -180,9 +181,17 @@ func isLeaseExpired(ad Ad) bool {
 }
 
 func (p *proofOfPlay) retryFailedPoPs() {
-	if len(p.retryQueue) == 0 {
+	numFailedPoPs := len(p.retryQueue)
+	if numFailedPoPs == 0 {
 		p.startFailedPoPTimer()
 		return
+	}
+
+	if numFailedPoPs > MaxRetryQueueSize {
+		p.publishEvent(
+			"ad-pop-retry-limit-reached",
+			fmt.Sprintf("%d failed PoPs in queue", numFailedPoPs),
+			"warning")
 	}
 
 	queue := p.retryQueue
@@ -201,8 +210,7 @@ func (p *proofOfPlay) retryFailedPoPs() {
 			p.publishEvent(
 				fmt.Sprintf("ad-%s-already-expired", popType),
 				fmt.Sprintf("ad: %s, expiry: %d", req.Ad["id"], req.Ad["lease_expiry"]),
-				"critical",
-			)
+				"critical")
 			continue
 		}
 
