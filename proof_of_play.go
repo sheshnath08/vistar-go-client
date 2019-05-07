@@ -182,7 +182,6 @@ func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
 func (p *proofOfPlay) retryFailedPoPs() {
 	numFailedPoPs := len(p.retryQueue)
 	if numFailedPoPs == 0 {
-		p.startFailedPoPTimer()
 		return
 	}
 
@@ -215,10 +214,13 @@ func (p *proofOfPlay) retryFailedPoPs() {
 
 		p.requests <- req
 	}
-
-	p.startFailedPoPTimer()
 }
 
 func (p *proofOfPlay) startFailedPoPTimer() {
-	time.AfterFunc(FailedRetryTimeout, p.retryFailedPoPs)
+	ticker := time.NewTicker(FailedRetryTimeout)
+	go func() {
+		for range ticker.C {
+			p.retryFailedPoPs()
+		}
+	}()
 }
