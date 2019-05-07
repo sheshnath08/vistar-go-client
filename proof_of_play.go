@@ -178,7 +178,7 @@ func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
 	}
 
 	expiry := time.Unix(int64(exp), 0)
-	return time.Now().Before(expiry)
+	return time.Now().After(expiry)
 }
 
 func (p *proofOfPlay) retryFailedPoPs() {
