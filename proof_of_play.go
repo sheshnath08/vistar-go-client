@@ -169,7 +169,7 @@ func (p *proofOfPlay) expire(ad Ad) error {
 	})
 }
 
-func isLeaseExpired(ad Ad) bool {
+func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
 	exp, ok := ad["lease_expiry"].(float64)
 	if !ok {
 		return true
@@ -200,7 +200,7 @@ func (p *proofOfPlay) retryFailedPoPs() {
 		req := queue[0]
 		queue = queue[1:]
 
-		if isLeaseExpired(req.Ad) {
+		if p.isLeaseExpired(req.Ad) {
 			popType := "pop"
 			if !req.Status {
 				popType = "expire"
