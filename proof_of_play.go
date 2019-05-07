@@ -175,9 +175,8 @@ func isLeaseExpired(ad Ad) bool {
 		return true
 	}
 
-	expiry := int64(exp)
-	now := int64(time.Now().Unix())
-	return now >= expiry
+	expiry := time.Unix(int64(exp), 0)
+	return time.Now().Before(expiry)
 }
 
 func (p *proofOfPlay) retryFailedPoPs() {
