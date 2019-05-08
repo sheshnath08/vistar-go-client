@@ -192,28 +192,29 @@ func (p *proofOfPlay) retryFailedPoPs() {
 			"warning")
 	}
 
-	go func() {
-		for {
-			req, more := <-p.retryQueue
-			if more {
-				ad := req.Ad
-				if p.isLeaseExpired(ad) {
-					popType := "pop"
-					if !req.Status {
-						popType = "expire"
-					}
+	go p.retryPoPs()
+}
 
-					p.publishEvent(
-						fmt.Sprintf("ad-%s-already-expired", popType),
-						fmt.Sprintf("ad: %s, expiry: %d", ad["id"], ad["lease_expiry"]),
-						"critical")
-					return
+func (p *proofOfPlay) retryPoPs() {
+	for {
+		req, more := <-p.retryQueue
+		if more {
+			ad := req.Ad
+			if p.isLeaseExpired(ad) {
+				popType := "pop"
+				if !req.Status {
+					popType = "expire"
 				}
 
+				p.publishEvent(
+					fmt.Sprintf("ad-%s-already-expired", popType),
+					fmt.Sprintf("ad: %s, expiry: %d", ad["id"], ad["lease_expiry"]),
+					"critical")
+			} else {
 				p.requests <- req
 			}
 		}
-	}()
+	}
 }
 
 func (p *proofOfPlay) startFailedPoPTimer() *time.Ticker {
