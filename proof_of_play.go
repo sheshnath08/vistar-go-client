@@ -61,6 +61,7 @@ type proofOfPlay struct {
 	httpClient *http.Client
 	requests   chan *PoPRequest
 	retryQueue chan *PoPRequest
+	ticker     *time.Ticker
 }
 
 func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
@@ -69,17 +70,18 @@ func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
 		eventFn:    eventFn,
 		httpClient: httpClient,
 		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, MaxRetryQueueSize),
+		retryQueue: make(chan *PoPRequest, 100),
 	}
 
 	go pop.start()
-	pop.startFailedPoPTimer()
+	pop.ticker = pop.startFailedPoPTimer()
 	return pop
 }
 
 func (p *proofOfPlay) Stop() {
 	close(p.requests)
 	close(p.retryQueue)
+	p.ticker.Stop()
 }
 
 func (p *proofOfPlay) Expire(ad Ad) {
@@ -214,11 +216,12 @@ func (p *proofOfPlay) retryFailedPoPs() {
 	}()
 }
 
-func (p *proofOfPlay) startFailedPoPTimer() {
+func (p *proofOfPlay) startFailedPoPTimer() *time.Ticker {
 	ticker := time.NewTicker(FailedRetryTimeout)
 	go func() {
 		for range ticker.C {
 			go p.retryFailedPoPs()
 		}
 	}()
+	return ticker
 }
