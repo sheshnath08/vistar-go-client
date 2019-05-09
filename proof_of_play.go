@@ -185,23 +185,27 @@ func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
 
 func (p *proofOfPlay) processRetries() {
 	for req := range p.retryQueue {
-		ad := req.Ad
+		p.retryPoP(req)
+	}
+}
 
-		if p.isLeaseExpired(ad) {
-			popType := "pop"
-			if !req.Status {
-				popType = "expire"
-			}
+func (p *proofOfPlay) retryPoP(req *PoPRequest) {
+	ad := req.Ad
 
-			p.publishEvent(
-				fmt.Sprintf("ad-%s-already-expired", popType),
-				fmt.Sprintf("ad: %s, expiry: %d", ad["id"], ad["lease_expiry"]),
-				"critical")
-			continue
+	if p.isLeaseExpired(ad) {
+		popType := "pop"
+		if !req.Status {
+			popType = "expire"
 		}
 
-		sleepDuration := RetryInterval - time.Since(req.RequestTime)
-		time.Sleep(sleepDuration)
-		p.requests <- req
+		p.publishEvent(
+			fmt.Sprintf("ad-%s-already-expired", popType),
+			fmt.Sprintf("ad: %s, expiry: %d", ad["id"], ad["lease_expiry"]),
+			"critical")
+		return
 	}
+
+	sleepDuration := RetryInterval - time.Since(req.RequestTime)
+	time.Sleep(sleepDuration)
+	p.requests <- req
 }
