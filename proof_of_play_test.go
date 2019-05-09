@@ -85,7 +85,7 @@ func TestRetryPoPs(t *testing.T) {
 		pop.retryQueue <- req
 	}
 
-	pop.retryFailedPoPs()
+	pop.processRetries()
 
 	defer func() {
 		counter := 0
