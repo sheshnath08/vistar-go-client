@@ -92,28 +92,33 @@ func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) {
 
 func (p *proofOfPlay) start() {
 	for req := range p.requests {
-		req.RequestTime = time.Now()
-
 		if req.Status {
 			err := p.confirm(req.Ad, req.DisplayTime)
 			if err != nil {
-				p.publishEvent(
-					"ad-pop-failed",
-					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
-					"warning")
-				p.retryQueue <- req
+				p.processRequestFailure(req, err)
 			}
 		} else {
 			err := p.expire(req.Ad)
 			if err != nil {
-				p.publishEvent(
-					"ad-expire-failed",
-					fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
-					"warning")
-				p.retryQueue <- req
+				p.processRequestFailure(req, err)
 			}
 		}
 	}
+}
+
+func (p *proofOfPlay) processRequestFailure(req *PoPRequest, err error) {
+	popType := "expire"
+	if req.Status {
+		popType = "pop"
+	}
+
+	p.publishEvent(
+		fmt.Sprintf("ad-%s-failed", popType),
+		fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
+		"warning")
+
+	req.RequestTime = time.Now()
+	p.retryQueue <- req
 }
 
 func (p proofOfPlay) publishEvent(name string, message string, level string) {
