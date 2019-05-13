@@ -107,14 +107,9 @@ func (p *proofOfPlay) start() {
 }
 
 func (p *proofOfPlay) processRequestFailure(req *PoPRequest, err error) {
-	popType := "expire"
-	if req.Status {
-		popType = "pop"
-	}
-
 	// Only raise the event on the first failed attempt
-	nilTime := time.Time{}
-	if req.RequestTime == nilTime {
+	if req.RequestTime.IsZero() {
+		popType := p.getPoPType(req)
 		p.publishEvent(
 			fmt.Sprintf("ad-%s-failed", popType),
 			fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
@@ -202,11 +197,7 @@ func (p *proofOfPlay) retryPoP(req *PoPRequest) {
 	ad := req.Ad
 
 	if p.isLeaseExpired(ad) {
-		popType := "pop"
-		if !req.Status {
-			popType = "expire"
-		}
-
+		popType := p.getPoPType(req)
 		p.publishEvent(
 			fmt.Sprintf("ad-%s-already-expired", popType),
 			fmt.Sprintf("ad: %s, expiry: %d", ad["id"], ad["lease_expiry"]),
@@ -217,4 +208,12 @@ func (p *proofOfPlay) retryPoP(req *PoPRequest) {
 	sleepDuration := RetryInterval - time.Since(req.RequestTime)
 	time.Sleep(sleepDuration)
 	p.requests <- req
+}
+
+func (p proofOfPlay) getPoPType(req *PoPRequest) string {
+	popType := "pop"
+	if !req.Status {
+		popType = "expire"
+	}
+	return popType
 }
