@@ -112,10 +112,14 @@ func (p *proofOfPlay) processRequestFailure(req *PoPRequest, err error) {
 		popType = "pop"
 	}
 
-	p.publishEvent(
-		fmt.Sprintf("ad-%s-failed", popType),
-		fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
-		"warning")
+	// Only raise the event on the first failed attempt
+	nilTime := time.Time{}
+	if req.RequestTime == nilTime {
+		p.publishEvent(
+			fmt.Sprintf("ad-%s-failed", popType),
+			fmt.Sprintf("adId: %s, error: %s", req.Ad["id"], err.Error()),
+			"warning")
+	}
 
 	req.RequestTime = time.Now()
 	p.retryQueue <- req
