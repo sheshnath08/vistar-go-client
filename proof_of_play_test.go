@@ -56,9 +56,7 @@ func TestRetryPoP(t *testing.T) {
 		retryQueue: make(chan *PoPRequest, 100),
 	}
 
-	defer func() {
-		pop.Stop()
-	}()
+	defer pop.Stop()
 
 	now := time.Now()
 	diff := 100 * time.Millisecond
@@ -81,7 +79,5 @@ func TestRetryPoP(t *testing.T) {
 
 	// Retry requests should be delayed
 	since := time.Since(now)
-	threshold := 10 * time.Millisecond
 	assert.True(t, since >= diff)
-	assert.True(t, since <= (diff+threshold))
 }
