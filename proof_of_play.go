@@ -211,9 +211,8 @@ func (p *proofOfPlay) retryPoP(req *PoPRequest) {
 }
 
 func (p proofOfPlay) getPoPType(req *PoPRequest) string {
-	popType := "pop"
-	if !req.Status {
-		popType = "expire"
+	if req.Status {
+		return "pop"
 	}
-	return popType
+	return "expire"
 }
