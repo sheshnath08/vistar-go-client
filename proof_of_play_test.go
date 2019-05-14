@@ -56,15 +56,20 @@ func TestRetryPoP(t *testing.T) {
 		retryQueue: make(chan *PoPRequest, 100),
 	}
 
+	defer func() {
+		pop.Stop()
+	}()
+
 	now := time.Now()
-	reqTime := now.Add(-59000 * time.Millisecond)
+	diff := 100 * time.Millisecond
+	reqTime := now.Add(-(RetryInterval - diff))
 	unexp := float64(now.Add(1 * time.Hour).Unix())
 	unexpAd := Ad{"id": "unexp", "lease_expiry": unexp}
 	unexpReq := &PoPRequest{Ad: unexpAd, Status: true, RequestTime: reqTime}
 	pop.retryPoP(unexpReq)
 	assert.Equal(t, len(pop.requests), 1)
 
-	exp := float64(now.Add(-1 * time.Hour).Unix())
+	exp := float64(now.Add(-RetryInterval).Unix())
 	expiredAd := Ad{"id": "expired", "lease_expiry": exp}
 	expiredReq := &PoPRequest{Ad: expiredAd, Status: true, RequestTime: reqTime}
 	pop.retryPoP(expiredReq)
@@ -74,7 +79,9 @@ func TestRetryPoP(t *testing.T) {
 	pop.retryPoP(unexpReq)
 	assert.Equal(t, len(pop.requests), 2)
 
-	end := time.Now()
-	assert.True(t, now.Before(end))
-	pop.Stop()
+	// Retry requests should be delayed
+	since := time.Since(now)
+	threshold := 10 * time.Millisecond
+	assert.True(t, since >= diff)
+	assert.True(t, since <= (diff+threshold))
 }
