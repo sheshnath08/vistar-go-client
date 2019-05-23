@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"time"
 
@@ -128,10 +129,40 @@ func (p proofOfPlay) publishEvent(name string, message string, level string) {
 	p.eventFn(name, message, "", level)
 }
 
+func (p *proofOfPlay) processResponse(popType string, adId string,
+	resp *http.Response) error {
+	code := resp.StatusCode
+
+	// Response was OK: 1xx - 3xx
+	if code >= http.StatusContinue && code < http.StatusBadRequest {
+		return nil
+	}
+
+	// Bad request 4xx - We don't need to retry these
+	if code >= http.StatusBadRequest && code < http.StatusInternalServerError {
+		body, err := ioutil.ReadAll(resp.Body)
+		if err == nil {
+			p.publishEvent(
+				fmt.Sprintf("ad-%s-failed", popType),
+				fmt.Sprintf("adId: %s, error: %s", adId, body),
+				"warning")
+		}
+		return nil
+	}
+
+	// Server error 5xx - we should retry
+	return errors.New(fmt.Sprintf("%d ", code))
+}
+
 func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
 	confirmUrl, ok := ad["proof_of_play_url"].(string)
 	if !ok {
 		return errors.New("Invalid proof of play url")
+	}
+
+	adId, ok := ad["id"].(string)
+	if !ok {
+		return errors.New("Invalid ad id")
 	}
 
 	data, err := json.Marshal(&ProofOfPlayRequest{DisplayTime: displayTime})
@@ -150,6 +181,13 @@ func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
 			time.Sleep(PoPRetryDelaySecs)
 			return attempt < PoPNumRetries, err
 		}
+
+		err = p.processResponse("pop", adId, resp)
+		if err != nil {
+			time.Sleep(PoPRetryDelaySecs)
+			return attempt < PoPNumRetries, err
+		}
+
 		defer resp.Body.Close()
 		return false, nil
 	})
@@ -159,6 +197,11 @@ func (p *proofOfPlay) expire(ad Ad) error {
 	expUrl, ok := ad["expiration_url"].(string)
 	if !ok {
 		return errors.New("Invalid expire url")
+	}
+
+	adId, ok := ad["id"].(string)
+	if !ok {
+		return errors.New("Invalid ad id")
 	}
 
 	return try.Do(func(attempt int) (bool, error) {
@@ -172,6 +215,13 @@ func (p *proofOfPlay) expire(ad Ad) error {
 			time.Sleep(PoPRetryDelaySecs)
 			return attempt < PoPNumRetries, err
 		}
+
+		err = p.processResponse("expire", adId, resp)
+		if err != nil {
+			time.Sleep(PoPRetryDelaySecs)
+			return attempt < PoPNumRetries, err
+		}
+
 		defer resp.Body.Close()
 		return false, nil
 	})
