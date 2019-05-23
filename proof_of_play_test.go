@@ -1,6 +1,10 @@
 package vistar
 
 import (
+	"bytes"
+	"encoding/json"
+	"io/ioutil"
+	"net/http"
 	"testing"
 	"time"
 
@@ -80,4 +84,32 @@ func TestRetryPoP(t *testing.T) {
 	// Retry requests should be delayed
 	since := time.Since(now)
 	assert.True(t, since >= diff)
+}
+
+func TestProcessResponse(t *testing.T) {
+	pop := &proofOfPlay{
+		requests:   make(chan *PoPRequest, 100),
+		retryQueue: make(chan *PoPRequest, 100),
+	}
+
+	defer pop.Stop()
+
+	okResp := &http.Response{StatusCode: http.StatusOK}
+	err := pop.processResponse("pop", "ad1", okResp)
+	assert.Nil(t, err)
+
+	serverErrorResp := &http.Response{
+		StatusCode: http.StatusInternalServerError,
+	}
+	err = pop.processResponse("pop", "ad1", serverErrorResp)
+	assert.NotNil(t, err)
+
+	errMsg := "A 400 error occurred"
+	data, _ := json.Marshal(map[string]interface{}{"msg": errMsg})
+	badRequestResponse := &http.Response{
+		StatusCode: http.StatusBadRequest,
+		Body:       ioutil.NopCloser(bytes.NewReader(data)),
+	}
+	err = pop.processResponse("pop", "ad1", badRequestResponse)
+	assert.Nil(t, err)
 }
