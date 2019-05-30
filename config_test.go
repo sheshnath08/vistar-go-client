@@ -237,6 +237,63 @@ func TestUpdateAdRequest(t *testing.T) {
 	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
 }
 
+func TestUpdateAdRequestMissingDisplayAreaAttr(t *testing.T) {
+	params := map[string]string{
+		"vistar.url":                 "staging-url",
+		"vistar.api_key":             "api-key",
+		"vistar.network_id":          "network-id",
+		"vistar.venue_id":            "venue-id",
+		"vistar.direct_connection":   "true",
+		"vistar.latitude":            "45.5",
+		"vistar.longitude":           "44.4",
+		"vistar.mime_types":          "a,b,c",
+		"vistar.width":               "100",
+		"vistar.height":              "200",
+		"vistar.allow_audio":         "true",
+		"vistar.static_duration":     "9",
+		"vistar.required_completion": "9",
+		"vistar.duration":            "300",
+		"vistar.interval":            "60",
+	}
+
+	conf := &adConfig{}
+	conf.parse(params)
+
+	req := &AdRequest{
+		DisplayAreas: []DisplayArea{
+			DisplayArea{Id: "d1", Height: 500,
+				SupportedMedia: []string{"image"}},
+		},
+		DeviceAttributes: []DeviceAttribute{
+			DeviceAttribute{Name: "attr1", Value: "value1"},
+			DeviceAttribute{Name: "attr2", Value: "value2"},
+		},
+	}
+
+	conf.UpdateAdRequest(req)
+
+	assert.Equal(t, req.ApiKey, "api-key")
+	assert.Equal(t, req.NetworkId, "network-id")
+	assert.Equal(t, req.DeviceId, "venue-id")
+	assert.Equal(t, req.VenueId, "venue-id")
+	assert.True(t, req.DirectConnection)
+	assert.Equal(t, req.Latitude, 45.5)
+	assert.Equal(t, req.Longitude, 44.4)
+	assert.NotEqual(t, req.DisplayTime, int64(0))
+	assert.Equal(t, req.RequiredCompletion, 9.0)
+	assert.Equal(t, req.NumberOfScreens, int64(1))
+	assert.Len(t, req.DisplayAreas, 1)
+	assert.Len(t, req.DeviceAttributes, 4)
+	assert.Equal(t, req.Duration, int64(300))
+	assert.Equal(t, req.Interval, int64(60))
+
+	assert.Equal(t, req.DisplayAreas[0].Width, int64(100))
+	assert.Equal(t, req.DisplayAreas[0].Height, int64(500))
+	assert.False(t, req.DisplayAreas[0].AllowAudio)
+	assert.Equal(t, req.DisplayAreas[0].SupportedMedia, []string{"image"})
+	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
+}
+
 func TestParseDimensionString(t *testing.T) {
 	conf := &adConfig{}
 	dims := conf.parseDimensionString("")

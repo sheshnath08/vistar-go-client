@@ -114,6 +114,24 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 
 	if len(req.DisplayAreas) == 0 {
 		req.DisplayAreas = c.baseRequest.DisplayAreas
+	} else {
+		mergedDisplayArea := req.DisplayAreas[0]
+		paramDisplayArea := c.baseRequest.DisplayAreas[0]
+
+		if mergedDisplayArea.Width == 0 {
+			mergedDisplayArea.Width = paramDisplayArea.Width
+		}
+
+		if mergedDisplayArea.Height == 0 {
+			mergedDisplayArea.Height = paramDisplayArea.Height
+		}
+
+		if mergedDisplayArea.SupportedMedia == nil {
+			mergedDisplayArea.SupportedMedia = paramDisplayArea.SupportedMedia
+		}
+
+		req.DisplayAreas[0] = mergedDisplayArea
+
 	}
 
 	attrs := make(map[string]string)
