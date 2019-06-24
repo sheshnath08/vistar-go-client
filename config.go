@@ -114,6 +114,30 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 
 	if len(req.DisplayAreas) == 0 {
 		req.DisplayAreas = c.baseRequest.DisplayAreas
+	} else {
+		for i := 0; i < len(req.DisplayAreas); i++ {
+			if len(req.DisplayAreas[i].SupportedMedia) == 0 {
+				req.DisplayAreas[i].SupportedMedia = make([]string,
+					len(c.baseRequest.DisplayAreas[0].SupportedMedia))
+				copy(req.DisplayAreas[i].SupportedMedia,
+					c.baseRequest.DisplayAreas[0].SupportedMedia)
+			}
+
+			if req.DisplayAreas[i].Width <= 0 {
+				req.DisplayAreas[i].Width =
+					c.baseRequest.DisplayAreas[0].Width
+			}
+
+			if req.DisplayAreas[i].Height <= 0 {
+				req.DisplayAreas[i].Height =
+					c.baseRequest.DisplayAreas[0].Height
+			}
+
+			if !req.DisplayAreas[i].AllowAudio {
+				req.DisplayAreas[i].AllowAudio =
+					c.baseRequest.DisplayAreas[0].AllowAudio
+			}
+		}
 	}
 
 	attrs := make(map[string]string)
