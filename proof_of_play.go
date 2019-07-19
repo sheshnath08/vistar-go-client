@@ -12,7 +12,7 @@ import (
 	try "gopkg.in/matryer/try.v1"
 )
 
-var PoPRequestTimeout = 2000 * time.Millisecond
+var PoPRequestTimeout = 30 * time.Second
 var PoPRetryDelaySecs = 10 * time.Second
 var PoPNumRetries = 3
 var RetryInterval = 1 * time.Minute
