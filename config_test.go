@@ -102,6 +102,7 @@ func TestParse(t *testing.T) {
 		"vistar.height":              "200",
 		"vistar.allow_audio":         "true",
 		"vistar.static_duration":     "9",
+		"vistar.max_duration":        "10",
 		"vistar.required_completion": "9",
 	}
 
@@ -131,6 +132,8 @@ func TestParse(t *testing.T) {
 	assert.Equal(t, conf.baseRequest.DisplayAreas[0].SupportedMedia,
 		[]string{"a", "b", "c"})
 	assert.Equal(t, conf.baseRequest.DisplayAreas[0].StaticDuration, int64(9))
+	assert.Equal(t, conf.baseRequest.DisplayAreas[0].MaxDuration, int64(10))
+	assert.Equal(t, conf.baseRequest.DisplayAreas[0].MinDuration, int64(0))
 }
 
 func TestParseBulk(t *testing.T) {
@@ -194,6 +197,7 @@ func TestUpdateAdRequest(t *testing.T) {
 		"vistar.height":              "200",
 		"vistar.allow_audio":         "true",
 		"vistar.static_duration":     "9",
+		"vistar.max_duration":        "10",
 		"vistar.required_completion": "9",
 		"vistar.duration":            "300",
 		"vistar.interval":            "60",
@@ -235,6 +239,8 @@ func TestUpdateAdRequest(t *testing.T) {
 	assert.False(t, req.DisplayAreas[0].AllowAudio)
 	assert.Equal(t, req.DisplayAreas[0].SupportedMedia, []string{"image"})
 	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
+	assert.Equal(t, req.DisplayAreas[0].MaxDuration, int64(0))
+	assert.Equal(t, req.DisplayAreas[0].MinDuration, int64(0))
 }
 
 func TestParseDimensionString(t *testing.T) {
