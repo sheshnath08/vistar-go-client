@@ -34,6 +34,16 @@ type PoPRequest struct {
 	RequestTime time.Time
 }
 
+type PoPError struct {
+	Status  int
+	Message string
+	AdId    string
+}
+
+func (e *PoPError) Error() string {
+	return fmt.Sprintf("%d: %s (%s)", e.Status, e.Message, e.AdId)
+}
+
 type testProofOfPlay struct {
 	requests   []*PoPRequest
 	retryQueue []*PoPRequest
@@ -89,7 +99,6 @@ func (p *proofOfPlay) Expire(ad Ad) {
 
 func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
 	req := &PoPRequest{Ad: ad, Status: true, DisplayTime: displayTime}
-	aid := ad["id"]
 	err := p.confirm(req)
 	return err
 }
@@ -149,13 +158,17 @@ func (p *proofOfPlay) processResponse(popType string, adId string,
 				fmt.Sprintf("ad-%s-failed", popType),
 				fmt.Sprintf("adId: %s, error: %s", adId, body),
 				"warning")
-			err = errors.New(fmt.Sprintf("%d ", code))
+			err = &PoPError{
+				AdId:    adId,
+				Message: fmt.Sprintf("%s", body),
+				Status:  code,
+			}
 		}
 		return false, err
 	}
 
 	// Server error 5xx - we should retry
-	return true, errors.New(fmt.Sprintf("%d ", code))
+	return true, &PoPError{AdId: adId, Status: code, Message: "Ad server error"}
 }
 
 func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
@@ -192,7 +205,11 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 			}
 
 			p.processRequestFailure(popReq, err)
-			return false, err
+			return false, &PoPError{
+				AdId:    aid,
+				Status:  http.StatusInternalServerError,
+				Message: fmt.Sprintf("%s", err),
+			}
 		}
 
 		shouldRetry, err := p.processResponse("pop", adId, resp)
