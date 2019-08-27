@@ -90,8 +90,8 @@ func (c *client) Confirm(adId string, displayTime int64) (string, error) {
 		return "", AdNotFound
 	}
 
-	c.pop.Confirm(ad, displayTime)
-	return ad["original_asset_url"].(string), nil
+	err := c.pop.Confirm(ad, displayTime)
+	return ad["original_asset_url"].(string), err
 }
 
 func (c *client) GetAd(config AdConfig, req *AdRequest) (

@@ -23,7 +23,7 @@ type ProofOfPlayRequest struct {
 
 type ProofOfPlay interface {
 	Expire(Ad)
-	Confirm(Ad, int64)
+	Confirm(Ad, int64) error
 	Stop()
 }
 
@@ -87,14 +87,17 @@ func (p *proofOfPlay) Expire(ad Ad) {
 	p.requests <- &PoPRequest{Ad: ad, Status: false}
 }
 
-func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) {
-	p.requests <- &PoPRequest{Ad: ad, Status: true, DisplayTime: displayTime}
+func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
+	req := &PoPRequest{Ad: ad, Status: true, DisplayTime: displayTime}
+	aid := ad["id"]
+	err := p.confirm(req)
+	return err
 }
 
 func (p *proofOfPlay) start() {
 	for req := range p.requests {
 		if req.Status {
-			err := p.confirm(req.Ad, req.DisplayTime)
+			err := p.confirm(req)
 			if err != nil {
 				p.processRequestFailure(req, err)
 			}
@@ -130,12 +133,12 @@ func (p proofOfPlay) publishEvent(name string, message string, level string) {
 }
 
 func (p *proofOfPlay) processResponse(popType string, adId string,
-	resp *http.Response) error {
+	resp *http.Response) (bool, error) {
 	code := resp.StatusCode
 
 	// Response was OK: 1xx - 3xx
 	if code >= http.StatusContinue && code < http.StatusBadRequest {
-		return nil
+		return false, nil
 	}
 
 	// Bad request 4xx - We don't need to retry these
@@ -146,15 +149,18 @@ func (p *proofOfPlay) processResponse(popType string, adId string,
 				fmt.Sprintf("ad-%s-failed", popType),
 				fmt.Sprintf("adId: %s, error: %s", adId, body),
 				"warning")
+			err = errors.New(fmt.Sprintf("%d ", code))
 		}
-		return nil
+		return false, err
 	}
 
 	// Server error 5xx - we should retry
-	return errors.New(fmt.Sprintf("%d ", code))
+	return true, errors.New(fmt.Sprintf("%d ", code))
 }
 
-func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
+func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
+	ad := popReq.Ad
+	displayTime := popReq.DisplayTime
 	confirmUrl, ok := ad["proof_of_play_url"].(string)
 	if !ok {
 		return errors.New("Invalid proof of play url")
@@ -170,7 +176,8 @@ func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
 		return err
 	}
 
-	return try.Do(func(attempt int) (bool, error) {
+	aid := ad["id"].(string)
+	err = try.Do(func(attempt int) (bool, error) {
 		req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
 		if err != nil {
 			return false, nil
@@ -179,18 +186,31 @@ func (p *proofOfPlay) confirm(ad Ad, displayTime int64) error {
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			time.Sleep(PoPRetryDelaySecs)
-			return attempt < PoPNumRetries, err
+			if attempt < PoPNumRetries {
+				time.Sleep(PoPRetryDelaySecs)
+				return true, err
+			}
+
+			p.processRequestFailure(popReq, err)
+			return false, err
 		}
 
-		err = p.processResponse("pop", adId, resp)
-		if err != nil {
-			time.Sleep(PoPRetryDelaySecs)
-			return attempt < PoPNumRetries, err
+		shouldRetry, err := p.processResponse("pop", adId, resp)
+		if shouldRetry {
+			if attempt < PoPNumRetries {
+				time.Sleep(PoPRetryDelaySecs)
+				return true, err
+			}
+
+			p.processRequestFailure(popReq, err)
+			return false, err
 		}
 
 		defer resp.Body.Close()
-		return false, nil
+		return false, err
 	})
+
+	return err
 }
 
 func (p *proofOfPlay) expire(ad Ad) error {
@@ -216,7 +236,7 @@ func (p *proofOfPlay) expire(ad Ad) error {
 			return attempt < PoPNumRetries, err
 		}
 
-		err = p.processResponse("expire", adId, resp)
+		_, err = p.processResponse("expire", adId, resp)
 		if err != nil {
 			time.Sleep(PoPRetryDelaySecs)
 			return attempt < PoPNumRetries, err
