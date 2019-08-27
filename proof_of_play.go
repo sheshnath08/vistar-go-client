@@ -189,7 +189,6 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 		return err
 	}
 
-	aid := ad["id"].(string)
 	err = try.Do(func(attempt int) (bool, error) {
 		req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
 		if err != nil {
@@ -205,11 +204,7 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 			}
 
 			p.processRequestFailure(popReq, err)
-			return false, &PoPError{
-				AdId:    aid,
-				Status:  http.StatusInternalServerError,
-				Message: fmt.Sprintf("%s", err),
-			}
+			return false, nil
 		}
 
 		shouldRetry, err := p.processResponse("pop", adId, resp)
@@ -220,7 +215,7 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 			}
 
 			p.processRequestFailure(popReq, err)
-			return false, err
+			return false, nil
 		}
 
 		defer resp.Body.Close()
