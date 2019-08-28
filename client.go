@@ -80,8 +80,8 @@ func (c *client) Expire(adId string) error {
 		return AdNotFound
 	}
 
-	c.pop.Expire(ad)
-	return nil
+	err := c.pop.Expire(ad)
+	return err
 }
 
 func (c *client) Confirm(adId string, displayTime int64) (string, error) {

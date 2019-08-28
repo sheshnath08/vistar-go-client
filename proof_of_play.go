@@ -22,7 +22,7 @@ type ProofOfPlayRequest struct {
 }
 
 type ProofOfPlay interface {
-	Expire(Ad)
+	Expire(Ad) error
 	Confirm(Ad, int64) error
 	Stop()
 }
@@ -93,8 +93,10 @@ func (p *proofOfPlay) Stop() {
 	close(p.retryQueue)
 }
 
-func (p *proofOfPlay) Expire(ad Ad) {
-	p.requests <- &PoPRequest{Ad: ad, Status: false}
+func (p *proofOfPlay) Expire(ad Ad) error {
+	req := &PoPRequest{Ad: ad, Status: false}
+	err := p.expire(req)
+	return err
 }
 
 func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
@@ -225,7 +227,8 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 	return err
 }
 
-func (p *proofOfPlay) expire(ad Ad) error {
+func (p *proofOfPlay) expire(popReq *PoPRequest) error {
+	ad := popReq.Ad
 	expUrl, ok := ad["expiration_url"].(string)
 	if !ok {
 		return errors.New("Invalid expire url")
@@ -236,7 +239,7 @@ func (p *proofOfPlay) expire(ad Ad) error {
 		return errors.New("Invalid ad id")
 	}
 
-	return try.Do(func(attempt int) (bool, error) {
+	err := try.Do(func(attempt int) (bool, error) {
 		req, err := http.NewRequest("GET", expUrl, nil)
 		if err != nil {
 			return false, nil
@@ -245,18 +248,31 @@ func (p *proofOfPlay) expire(ad Ad) error {
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
 			time.Sleep(PoPRetryDelaySecs)
-			return attempt < PoPNumRetries, err
+			if attempt < PoPNumRetries {
+				time.Sleep(PoPRetryDelaySecs)
+				return true, err
+			}
+
+			p.processRequestFailure(popReq, err)
+			return false, nil
 		}
 
-		_, err = p.processResponse("expire", adId, resp)
-		if err != nil {
-			time.Sleep(PoPRetryDelaySecs)
-			return attempt < PoPNumRetries, err
+		shouldRetry, err := p.processResponse("expire", adId, resp)
+		if shouldRetry {
+			if attempt < PoPNumRetries {
+				time.Sleep(PoPRetryDelaySecs)
+				return true, err
+			}
+
+			p.processRequestFailure(popReq, err)
+			return false, nil
 		}
 
 		defer resp.Body.Close()
-		return false, nil
+		return false, err
 	})
+
+	return err
 }
 
 func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
