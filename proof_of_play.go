@@ -3,7 +3,6 @@ package vistar
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io/ioutil"
 	"net/http"
@@ -37,11 +36,10 @@ type PoPRequest struct {
 type PoPError struct {
 	Status  int
 	Message string
-	AdId    string
 }
 
 func (e *PoPError) Error() string {
-	return fmt.Sprintf("%d: %s (%s)", e.Status, e.Message, e.AdId)
+	return fmt.Sprintf("%d: %s", e.Status, e.Message)
 }
 
 type testProofOfPlay struct {
@@ -161,16 +159,36 @@ func (p *proofOfPlay) processResponse(popType string, adId string,
 				fmt.Sprintf("adId: %s, error: %s", adId, body),
 				"warning")
 			err = &PoPError{
-				AdId:    adId,
-				Message: fmt.Sprintf("%s", body),
 				Status:  code,
+				Message: fmt.Sprintf("%s", body),
 			}
 		}
-		return false, err
+		return false, &PoPError{
+			Status:  code,
+			Message: err.Error(),
+		}
 	}
 
-	// Server error 5xx - we should retry
-	return true, &PoPError{AdId: adId, Status: code, Message: "Ad server error"}
+	// Ad server return 5xx - retry this request
+	return true, &PoPError{
+		Status:  code,
+		Message: fmt.Sprintf("Ad server responded %d", code),
+	}
+}
+
+func (p *proofOfPlay) retryRequestOrError(popReq *PoPRequest, err error,
+	attempt int) (bool, error) {
+	if attempt < PoPNumRetries {
+		time.Sleep(PoPRetryDelaySecs)
+		return true, err
+	}
+
+	// Send back 202 Request Accepted to indicate we will retry the request
+	p.processRequestFailure(popReq, err)
+	return false, &PoPError{
+		Status:  http.StatusAccepted,
+		Message: err.Error(),
+	}
 }
 
 func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
@@ -178,46 +196,50 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 	displayTime := popReq.DisplayTime
 	confirmUrl, ok := ad["proof_of_play_url"].(string)
 	if !ok {
-		return errors.New("Invalid proof of play url")
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid proof of play URL",
+		}
 	}
 
 	adId, ok := ad["id"].(string)
 	if !ok {
-		return errors.New("Invalid ad id")
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid ad id",
+		}
 	}
 
 	data, err := json.Marshal(&ProofOfPlayRequest{DisplayTime: displayTime})
 	if err != nil {
-		return err
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: err.Error(),
+		}
 	}
 
 	err = try.Do(func(attempt int) (bool, error) {
 		req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
 		if err != nil {
-			return false, nil
+			return false, &PoPError{
+				Status:  http.StatusBadRequest,
+				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
+			}
 		}
 
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
-			time.Sleep(PoPRetryDelaySecs)
-			if attempt < PoPNumRetries {
-				time.Sleep(PoPRetryDelaySecs)
-				return true, err
+			// Connection error - retry the request
+			err = &PoPError{
+				Status:  http.StatusInternalServerError,
+				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
 			}
-
-			p.processRequestFailure(popReq, err)
-			return false, nil
+			return p.retryRequestOrError(popReq, err, attempt)
 		}
 
 		shouldRetry, err := p.processResponse("pop", adId, resp)
 		if shouldRetry {
-			if attempt < PoPNumRetries {
-				time.Sleep(PoPRetryDelaySecs)
-				return true, err
-			}
-
-			p.processRequestFailure(popReq, err)
-			return false, nil
+			return p.retryRequestOrError(popReq, err, attempt)
 		}
 
 		defer resp.Body.Close()
@@ -231,41 +253,42 @@ func (p *proofOfPlay) expire(popReq *PoPRequest) error {
 	ad := popReq.Ad
 	expUrl, ok := ad["expiration_url"].(string)
 	if !ok {
-		return errors.New("Invalid expire url")
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid expire url",
+		}
 	}
 
 	adId, ok := ad["id"].(string)
 	if !ok {
-		return errors.New("Invalid ad id")
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: "Invalid ad id",
+		}
 	}
 
 	err := try.Do(func(attempt int) (bool, error) {
 		req, err := http.NewRequest("GET", expUrl, nil)
 		if err != nil {
-			return false, nil
+			return false, &PoPError{
+				Status:  http.StatusBadRequest,
+				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
+			}
 		}
 
 		resp, err := p.httpClient.Do(req)
 		if err != nil {
-			time.Sleep(PoPRetryDelaySecs)
-			if attempt < PoPNumRetries {
-				time.Sleep(PoPRetryDelaySecs)
-				return true, err
+			// Connection error - retry the request
+			err = &PoPError{
+				Status:  http.StatusInternalServerError,
+				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
 			}
-
-			p.processRequestFailure(popReq, err)
-			return false, nil
+			return p.retryRequestOrError(popReq, err, attempt)
 		}
 
 		shouldRetry, err := p.processResponse("expire", adId, resp)
 		if shouldRetry {
-			if attempt < PoPNumRetries {
-				time.Sleep(PoPRetryDelaySecs)
-				return true, err
-			}
-
-			p.processRequestFailure(popReq, err)
-			return false, nil
+			return p.retryRequestOrError(popReq, err, attempt)
 		}
 
 		defer resp.Body.Close()
@@ -287,11 +310,11 @@ func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
 
 func (p *proofOfPlay) processRetries() {
 	for req := range p.retryQueue {
-		p.retryPoP(req)
+		p.processRetry(req)
 	}
 }
 
-func (p *proofOfPlay) retryPoP(req *PoPRequest) {
+func (p *proofOfPlay) processRetry(req *PoPRequest) {
 	ad := req.Ad
 
 	if p.isLeaseExpired(ad) {
