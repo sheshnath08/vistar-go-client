@@ -113,7 +113,7 @@ func (p *proofOfPlay) start() {
 				p.processRequestFailure(req, err)
 			}
 		} else {
-			err := p.expire(req.Ad)
+			err := p.expire(req)
 			if err != nil {
 				p.processRequestFailure(req, err)
 			}
