@@ -7,13 +7,9 @@ import (
 	"io/ioutil"
 	"net/http"
 	"time"
-
-	try "gopkg.in/matryer/try.v1"
 )
 
 var PoPRequestTimeout = 30 * time.Second
-var PoPRetryDelaySecs = 10 * time.Second
-var PoPNumRetries = 3
 var RetryInterval = 1 * time.Minute
 
 type ProofOfPlayRequest struct {
@@ -106,15 +102,9 @@ func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
 func (p *proofOfPlay) start() {
 	for req := range p.requests {
 		if req.Status {
-			err := p.confirm(req)
-			if err != nil {
-				p.processRequestFailure(req, err)
-			}
+			p.confirm(req)
 		} else {
-			err := p.expire(req)
-			if err != nil {
-				p.processRequestFailure(req, err)
-			}
+			p.expire(req)
 		}
 	}
 }
@@ -141,13 +131,24 @@ func (p proofOfPlay) publishEvent(name string, message string, level string) {
 	p.eventFn(name, message, "", level)
 }
 
-func (p *proofOfPlay) processResponse(popType string, adId string,
-	resp *http.Response) (bool, error) {
-	code := resp.StatusCode
+func (p *proofOfPlay) makePoPRequest(req *http.Request,
+	popReq *PoPRequest, adId string, popType string) error {
+	resp, err := p.httpClient.Do(req)
+	if err != nil {
+		// Connection error - retry the request
+		p.processRequestFailure(popReq, err)
+		return &PoPError{
+			Status:  http.StatusAccepted,
+			Message: fmt.Sprintf("Connection Error: %s", err.Error()),
+		}
+	}
 
+	defer resp.Body.Close()
+
+	code := resp.StatusCode
 	// Response was OK: 1xx - 3xx
 	if code >= http.StatusContinue && code < http.StatusBadRequest {
-		return false, nil
+		return nil
 	}
 
 	// Bad request 4xx - We don't need to retry these
@@ -163,31 +164,16 @@ func (p *proofOfPlay) processResponse(popType string, adId string,
 				Message: fmt.Sprintf("%s", body),
 			}
 		}
-		return false, &PoPError{
+		return &PoPError{
 			Status:  code,
 			Message: err.Error(),
 		}
 	}
 
 	// Ad server return 5xx - retry this request
-	return true, &PoPError{
-		Status:  code,
-		Message: fmt.Sprintf("Ad server responded %d", code),
-	}
-}
-
-func (p *proofOfPlay) retryRequestOrError(popReq *PoPRequest, err error,
-	attempt int) (bool, error) {
-	if attempt < PoPNumRetries {
-		time.Sleep(PoPRetryDelaySecs)
-		return true, err
-	}
-
-	// Send back 202 Request Accepted to indicate we will retry the request
-	p.processRequestFailure(popReq, err)
-	return false, &PoPError{
+	return &PoPError{
 		Status:  http.StatusAccepted,
-		Message: err.Error(),
+		Message: fmt.Sprintf("Ad server responded %d", code),
 	}
 }
 
@@ -218,35 +204,15 @@ func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
 		}
 	}
 
-	err = try.Do(func(attempt int) (bool, error) {
-		req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
-		if err != nil {
-			return false, &PoPError{
-				Status:  http.StatusBadRequest,
-				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
-			}
+	req, err := http.NewRequest("POST", confirmUrl, bytes.NewBuffer(data))
+	if err != nil {
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("Connection Error: %s", err.Error()),
 		}
+	}
 
-		resp, err := p.httpClient.Do(req)
-		if err != nil {
-			// Connection error - retry the request
-			err = &PoPError{
-				Status:  http.StatusInternalServerError,
-				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
-			}
-			return p.retryRequestOrError(popReq, err, attempt)
-		}
-
-		shouldRetry, err := p.processResponse("pop", adId, resp)
-		if shouldRetry {
-			return p.retryRequestOrError(popReq, err, attempt)
-		}
-
-		defer resp.Body.Close()
-		return false, err
-	})
-
-	return err
+	return p.makePoPRequest(req, popReq, adId, "pop")
 }
 
 func (p *proofOfPlay) expire(popReq *PoPRequest) error {
@@ -267,35 +233,15 @@ func (p *proofOfPlay) expire(popReq *PoPRequest) error {
 		}
 	}
 
-	err := try.Do(func(attempt int) (bool, error) {
-		req, err := http.NewRequest("GET", expUrl, nil)
-		if err != nil {
-			return false, &PoPError{
-				Status:  http.StatusBadRequest,
-				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
-			}
+	req, err := http.NewRequest("GET", expUrl, nil)
+	if err != nil {
+		return &PoPError{
+			Status:  http.StatusBadRequest,
+			Message: fmt.Sprintf("Connection Error: %s", err.Error()),
 		}
+	}
 
-		resp, err := p.httpClient.Do(req)
-		if err != nil {
-			// Connection error - retry the request
-			err = &PoPError{
-				Status:  http.StatusInternalServerError,
-				Message: fmt.Sprintf("Connection Error: %s", err.Error()),
-			}
-			return p.retryRequestOrError(popReq, err, attempt)
-		}
-
-		shouldRetry, err := p.processResponse("expire", adId, resp)
-		if shouldRetry {
-			return p.retryRequestOrError(popReq, err, attempt)
-		}
-
-		defer resp.Body.Close()
-		return false, err
-	})
-
-	return err
+	return p.makePoPRequest(req, popReq, adId, "expire")
 }
 
 func (p *proofOfPlay) isLeaseExpired(ad Ad) bool {
