@@ -139,7 +139,7 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 		return &PoPError{
 			Status: http.StatusAccepted,
 			Message: fmt.Sprintf(
-				"Connection Error, Request will be Retried: %s", err.Error()),
+				"Connection error, request will be retried: %s", err.Error()),
 		}
 	}
 
@@ -175,7 +175,7 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 	err = &PoPError{
 		Status: http.StatusAccepted,
 		Message: fmt.Sprintf(
-			"Ad server responded %d. Request will be Retried.", code),
+			"Ad server responded %d: request will be retried.", code),
 	}
 	p.processRequestFailure(popReq, err)
 	return err
