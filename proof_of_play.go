@@ -47,18 +47,19 @@ func NewTestProofOfPlay() *testProofOfPlay {
 	return &testProofOfPlay{requests: make([]*PoPRequest, 0, 0)}
 }
 
-func (t *testProofOfPlay) Expire(ad Ad) {
-	t.requests = append(t.requests, &PoPRequest{Ad: ad, Status: false})
-}
-
 func (t *testProofOfPlay) Stop() {
 }
 
-func (t *testProofOfPlay) Confirm(ad Ad, displayTime int64) {
-	t.requests = append(t.requests, &PoPRequest{
-		Ad:          ad,
-		Status:      true,
-		DisplayTime: displayTime})
+func (t *testProofOfPlay) Confirm(ad Ad, displayTime int64) error {
+	t.requests = append(
+		t.requests,
+		&PoPRequest{Ad: ad, Status: false, DisplayTime: displayTime})
+	return nil
+}
+
+func (t *testProofOfPlay) Expire(ad Ad) error {
+	t.requests = append(t.requests, &PoPRequest{Ad: ad, Status: true})
+	return nil
 }
 
 type proofOfPlay struct {

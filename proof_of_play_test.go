@@ -3,6 +3,7 @@ package vistar
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io/ioutil"
 	"net/http"
 	"testing"
@@ -10,6 +11,18 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+type RoundTripFunc func(req *http.Request) (*http.Response, error)
+
+func (f RoundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
+
+func NewTestHttpClient(fn RoundTripFunc) *http.Client {
+	return &http.Client{
+		Transport: RoundTripFunc(fn),
+	}
+}
 
 type testEvent struct {
 	name    string
@@ -22,9 +35,14 @@ func TestStop(t *testing.T) {
 	pop := NewProofOfPlay(nil)
 
 	ad := Ad{}
-	pop.Expire(ad)
+	req := &PoPRequest{
+		Ad:          ad,
+		Status:      false,
+		RequestTime: time.Now(),
+	}
+	pop.processRequestFailure(req, nil)
 
-	recv := <-pop.requests
+	recv := <-pop.retryQueue
 	assert.Equal(t, ad, recv.Ad)
 	assert.False(t, recv.Status)
 
@@ -36,7 +54,7 @@ func TestStop(t *testing.T) {
 		}
 	}()
 
-	pop.Expire(ad)
+	pop.processRequestFailure(req, nil)
 }
 
 func TestIsLeaseExpired(t *testing.T) {
@@ -54,7 +72,7 @@ func TestIsLeaseExpired(t *testing.T) {
 	assert.False(t, isExpired)
 }
 
-func TestRetryPoP(t *testing.T) {
+func TestProcessRetry(t *testing.T) {
 	pop := &proofOfPlay{
 		requests:   make(chan *PoPRequest, 100),
 		retryQueue: make(chan *PoPRequest, 100),
@@ -68,17 +86,17 @@ func TestRetryPoP(t *testing.T) {
 	unexp := float64(now.Add(1 * time.Hour).Unix())
 	unexpAd := Ad{"id": "unexp", "lease_expiry": unexp}
 	unexpReq := &PoPRequest{Ad: unexpAd, Status: true, RequestTime: reqTime}
-	pop.retryPoP(unexpReq)
+	pop.processRetry(unexpReq)
 	assert.Equal(t, len(pop.requests), 1)
 
 	exp := float64(now.Add(-RetryInterval).Unix())
 	expiredAd := Ad{"id": "expired", "lease_expiry": exp}
 	expiredReq := &PoPRequest{Ad: expiredAd, Status: true, RequestTime: reqTime}
-	pop.retryPoP(expiredReq)
+	pop.processRetry(expiredReq)
 	assert.Equal(t, len(pop.requests), 1)
 
 	unexpReq = &PoPRequest{Ad: unexpAd, Status: false, RequestTime: reqTime}
-	pop.retryPoP(unexpReq)
+	pop.processRetry(unexpReq)
 	assert.Equal(t, len(pop.requests), 2)
 
 	// Retry requests should be delayed
@@ -86,30 +104,119 @@ func TestRetryPoP(t *testing.T) {
 	assert.True(t, since >= diff)
 }
 
-func TestProcessResponse(t *testing.T) {
+func TestMakePoPRequestOKResponse(t *testing.T) {
+	client := NewTestHttpClient(func(req *http.Request) (*http.Response, error) {
+		respData, _ := json.Marshal(map[string]interface{}{"msg": "It was OK"})
+		return &http.Response{
+			StatusCode: http.StatusOK,
+			Body:       ioutil.NopCloser(bytes.NewReader(respData)),
+		}, nil
+	})
+
 	pop := &proofOfPlay{
 		requests:   make(chan *PoPRequest, 100),
 		retryQueue: make(chan *PoPRequest, 100),
+		httpClient: client,
 	}
 
 	defer pop.Stop()
 
-	okResp := &http.Response{StatusCode: http.StatusOK}
-	err := pop.processResponse("pop", "ad1", okResp)
-	assert.Nil(t, err)
+	adId := "1234"
 
-	serverErrorResp := &http.Response{
-		StatusCode: http.StatusInternalServerError,
-	}
-	err = pop.processResponse("pop", "ad1", serverErrorResp)
-	assert.NotNil(t, err)
+	ad := Ad{"id": adId}
+	popReq := &PoPRequest{Ad: ad, Status: true, RequestTime: time.Now()}
+	reqData, _ := json.Marshal(popReq)
+	req, _ := http.NewRequest("POST", "/adserver/pop", bytes.NewBuffer(reqData))
 
-	errMsg := "A 400 error occurred"
-	data, _ := json.Marshal(map[string]interface{}{"msg": errMsg})
-	badRequestResponse := &http.Response{
-		StatusCode: http.StatusBadRequest,
-		Body:       ioutil.NopCloser(bytes.NewReader(data)),
-	}
-	err = pop.processResponse("pop", "ad1", badRequestResponse)
+	err := pop.makePoPRequest(req, popReq, adId, "pop")
 	assert.Nil(t, err)
+}
+
+func TestMakePoPRequest400Response(t *testing.T) {
+	client := NewTestHttpClient(func(req *http.Request) (*http.Response, error) {
+		respData, _ := json.Marshal(map[string]interface{}{"msg": "Bad Request"})
+		return &http.Response{
+			StatusCode: http.StatusBadRequest,
+			Body:       ioutil.NopCloser(bytes.NewReader(respData)),
+		}, nil
+	})
+
+	pop := &proofOfPlay{
+		requests:   make(chan *PoPRequest, 100),
+		retryQueue: make(chan *PoPRequest, 100),
+		httpClient: client,
+	}
+
+	defer pop.Stop()
+
+	adId := "1234"
+	ad := Ad{"id": adId}
+	popReq := &PoPRequest{Ad: ad, Status: true, RequestTime: time.Now()}
+	reqData, _ := json.Marshal(popReq)
+	req, _ := http.NewRequest("POST", "/adserver/pop", bytes.NewBuffer(reqData))
+
+	err := pop.makePoPRequest(req, popReq, adId, "pop")
+	popErr, ok := err.(*PoPError)
+	assert.True(t, ok)
+	assert.Equal(t, popErr.Status, http.StatusBadRequest)
+	assert.Len(t, pop.retryQueue, 0)
+	assert.Len(t, pop.requests, 0)
+}
+
+func TestMakePoPRequest500Response(t *testing.T) {
+	client := NewTestHttpClient(func(req *http.Request) (*http.Response, error) {
+		respData, _ := json.Marshal(map[string]interface{}{"msg": "Conn error"})
+		return &http.Response{
+			StatusCode: http.StatusInternalServerError,
+			Body:       ioutil.NopCloser(bytes.NewReader(respData)),
+		}, nil
+	})
+
+	pop := &proofOfPlay{
+		requests:   make(chan *PoPRequest, 100),
+		retryQueue: make(chan *PoPRequest, 100),
+		httpClient: client,
+	}
+
+	defer pop.Stop()
+
+	adId := "1234"
+	ad := Ad{"id": adId}
+	popReq := &PoPRequest{Ad: ad, Status: true, RequestTime: time.Now()}
+	reqData, _ := json.Marshal(popReq)
+	req, _ := http.NewRequest("POST", "/adserver/pop", bytes.NewBuffer(reqData))
+
+	err := pop.makePoPRequest(req, popReq, adId, "pop")
+	popErr, ok := err.(*PoPError)
+	assert.True(t, ok)
+	assert.Equal(t, popErr.Status, http.StatusAccepted)
+
+	assert.Len(t, pop.retryQueue, 1)
+}
+
+func TestMakePoPRequestErrors(t *testing.T) {
+	client := NewTestHttpClient(func(req *http.Request) (*http.Response, error) {
+		return nil, errors.New("HTTP Client error")
+	})
+
+	pop := &proofOfPlay{
+		requests:   make(chan *PoPRequest, 100),
+		retryQueue: make(chan *PoPRequest, 100),
+		httpClient: client,
+	}
+
+	defer pop.Stop()
+
+	adId := "1234"
+	ad := Ad{"id": adId}
+	popReq := &PoPRequest{Ad: ad, Status: true, RequestTime: time.Now()}
+	reqData, _ := json.Marshal(popReq)
+	req, _ := http.NewRequest("POST", "/adserver/pop", bytes.NewBuffer(reqData))
+
+	err := pop.makePoPRequest(req, popReq, adId, "pop")
+	popErr, ok := err.(*PoPError)
+	assert.True(t, ok)
+	assert.Equal(t, popErr.Status, http.StatusAccepted)
+
+	assert.Len(t, pop.retryQueue, 1)
 }
