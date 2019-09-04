@@ -89,14 +89,12 @@ func (p *proofOfPlay) Stop() {
 
 func (p *proofOfPlay) Expire(ad Ad) error {
 	req := &PoPRequest{Ad: ad, Status: false}
-	err := p.expire(req)
-	return err
+	return p.expire(req)
 }
 
 func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
 	req := &PoPRequest{Ad: ad, Status: true, DisplayTime: displayTime}
-	err := p.confirm(req)
-	return err
+	return p.confirm(req)
 }
 
 func (p *proofOfPlay) start() {
@@ -138,8 +136,9 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 		// Connection error - retry the request
 		p.processRequestFailure(popReq, err)
 		return &PoPError{
-			Status:  http.StatusAccepted,
-			Message: fmt.Sprintf("Connection Error: %s", err.Error()),
+			Status: http.StatusAccepted,
+			Message: fmt.Sprintf(
+				"Connection Error, Request will be Retried: %s", err.Error()),
 		}
 	}
 
@@ -164,6 +163,7 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 				Message: fmt.Sprintf("%s", body),
 			}
 		}
+
 		return &PoPError{
 			Status:  code,
 			Message: err.Error(),
@@ -171,10 +171,13 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 	}
 
 	// Ad server return 5xx - retry this request
-	return &PoPError{
-		Status:  http.StatusAccepted,
-		Message: fmt.Sprintf("Ad server responded %d", code),
+	err = &PoPError{
+		Status: http.StatusAccepted,
+		Message: fmt.Sprintf(
+			"Ad server responded %d. Request will be Retried.", code),
 	}
+	p.processRequestFailure(popReq, err)
+	return err
 }
 
 func (p *proofOfPlay) confirm(popReq *PoPRequest) error {
