@@ -238,8 +238,8 @@ func TestUpdateAdRequest(t *testing.T) {
 	assert.Equal(t, req.DisplayAreas[0].Height, int64(500))
 	assert.True(t, req.DisplayAreas[0].AllowAudio)
 	assert.Equal(t, req.DisplayAreas[0].SupportedMedia, []string{"image"})
-	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
-	assert.Equal(t, req.DisplayAreas[0].MaxDuration, int64(0))
+	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(9))
+	assert.Equal(t, req.DisplayAreas[0].MaxDuration, int64(10))
 	assert.Equal(t, req.DisplayAreas[0].MinDuration, int64(0))
 }
 
@@ -257,6 +257,8 @@ func TestUpdateAdRequestIncompleteDisplayAreaParams(t *testing.T) {
 		"vistar.height":              "200",
 		"vistar.allow_audio":         "true",
 		"vistar.static_duration":     "9",
+		"vistar.max_duration":        "19",
+		"vistar.min_duration":        "9",
 		"vistar.required_completion": "9",
 		"vistar.duration":            "300",
 		"vistar.interval":            "60",
@@ -268,7 +270,14 @@ func TestUpdateAdRequestIncompleteDisplayAreaParams(t *testing.T) {
 	req := &AdRequest{
 		DisplayAreas: []DisplayArea{
 			DisplayArea{Id: "d1", AllowAudio: false},
-			DisplayArea{Id: "d2", Width: 500, Height: 500, AllowAudio: true,
+			DisplayArea{
+				Id:             "d2",
+				Width:          500,
+				Height:         500,
+				AllowAudio:     true,
+				StaticDuration: 5,
+				MinDuration:    5,
+				MaxDuration:    15,
 				SupportedMedia: []string{"image"}},
 		},
 		DeviceAttributes: []DeviceAttribute{
@@ -298,13 +307,17 @@ func TestUpdateAdRequestIncompleteDisplayAreaParams(t *testing.T) {
 	assert.Equal(t, req.DisplayAreas[0].Height, int64(200))
 	assert.True(t, req.DisplayAreas[0].AllowAudio)
 	assert.Equal(t, req.DisplayAreas[0].SupportedMedia, []string{"a", "b", "c"})
-	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(0))
+	assert.Equal(t, req.DisplayAreas[0].StaticDuration, int64(9))
+	assert.Equal(t, req.DisplayAreas[0].MinDuration, int64(9))
+	assert.Equal(t, req.DisplayAreas[0].MaxDuration, int64(19))
 
 	assert.Equal(t, req.DisplayAreas[1].Width, int64(500))
 	assert.Equal(t, req.DisplayAreas[1].Height, int64(500))
 	assert.True(t, req.DisplayAreas[1].AllowAudio)
 	assert.Equal(t, req.DisplayAreas[1].SupportedMedia, []string{"image"})
-	assert.Equal(t, req.DisplayAreas[1].StaticDuration, int64(0))
+	assert.Equal(t, req.DisplayAreas[1].StaticDuration, int64(5))
+	assert.Equal(t, req.DisplayAreas[1].MinDuration, int64(5))
+	assert.Equal(t, req.DisplayAreas[1].MaxDuration, int64(15))
 }
 
 func TestParseDimensionString(t *testing.T) {

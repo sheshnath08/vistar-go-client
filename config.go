@@ -139,6 +139,21 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 				req.DisplayAreas[i].AllowAudio =
 					c.baseRequest.DisplayAreas[0].AllowAudio
 			}
+
+			if req.DisplayAreas[i].MinDuration == 0 {
+				req.DisplayAreas[i].MinDuration =
+					c.baseRequest.DisplayAreas[0].MinDuration
+			}
+
+			if req.DisplayAreas[i].MaxDuration == 0 {
+				req.DisplayAreas[i].MaxDuration =
+					c.baseRequest.DisplayAreas[0].MaxDuration
+			}
+
+			if req.DisplayAreas[i].StaticDuration == 0 {
+				req.DisplayAreas[i].StaticDuration =
+					c.baseRequest.DisplayAreas[0].StaticDuration
+			}
 		}
 	}
 
