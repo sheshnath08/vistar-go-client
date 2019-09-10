@@ -80,8 +80,8 @@ func (c *client) Expire(adId string) error {
 		return AdNotFound
 	}
 
-	c.pop.Expire(ad)
-	return nil
+	err := c.pop.Expire(ad)
+	return err
 }
 
 func (c *client) Confirm(adId string, displayTime int64) (string, error) {
@@ -90,8 +90,8 @@ func (c *client) Confirm(adId string, displayTime int64) (string, error) {
 		return "", AdNotFound
 	}
 
-	c.pop.Confirm(ad, displayTime)
-	return ad["original_asset_url"].(string), nil
+	err := c.pop.Confirm(ad, displayTime)
+	return ad["original_asset_url"].(string), err
 }
 
 func (c *client) GetAd(config AdConfig, req *AdRequest) (

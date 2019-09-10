@@ -21,12 +21,14 @@ type Dimension struct {
 type DeviceParams map[string]string
 
 type DisplayArea struct {
-	Id             string   `json:"id"`
-	Width          int64    `json:"width"`
-	Height         int64    `json:"height"`
 	AllowAudio     bool     `json:"allow_audio"`
-	SupportedMedia []string `json:"supported_media"`
+	Height         int64    `json:"height"`
+	Id             string   `json:"id"`
+	MaxDuration    int64    `json:"max_duration,omitempty"`
+	MinDuration    int64    `json:"min_duration,omitempty"`
 	StaticDuration int64    `json:"static_duration,omitempty"`
+	SupportedMedia []string `json:"supported_media"`
+	Width          int64    `json:"width"`
 }
 
 type DeviceAttribute struct {
@@ -137,6 +139,21 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 				req.DisplayAreas[i].AllowAudio =
 					c.baseRequest.DisplayAreas[0].AllowAudio
 			}
+
+			if req.DisplayAreas[i].MinDuration == 0 {
+				req.DisplayAreas[i].MinDuration =
+					c.baseRequest.DisplayAreas[0].MinDuration
+			}
+
+			if req.DisplayAreas[i].MaxDuration == 0 {
+				req.DisplayAreas[i].MaxDuration =
+					c.baseRequest.DisplayAreas[0].MaxDuration
+			}
+
+			if req.DisplayAreas[i].StaticDuration == 0 {
+				req.DisplayAreas[i].StaticDuration =
+					c.baseRequest.DisplayAreas[0].StaticDuration
+			}
 		}
 	}
 
@@ -192,6 +209,12 @@ func (c *adConfig) parse(params DeviceParams) {
 			SupportedMedia: mimeTypes,
 		},
 	}
+
+	req.DisplayAreas[0].MinDuration = c.parseInt(params,
+		"vistar.min_duration", 0)
+
+	req.DisplayAreas[0].MaxDuration = c.parseInt(params,
+		"vistar.max_duration", 0)
 
 	req.DisplayAreas[0].StaticDuration = c.parseInt(params,
 		"vistar.static_duration", 0)
