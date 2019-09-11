@@ -32,17 +32,20 @@ type Client interface {
 	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
 	GetAssets(AdConfig, *AdRequest) (*AssetResponse, error)
+	GetStats() map[string]interface{}
 	Close()
 }
 
 type client struct {
-	httpClient    *http.Client
-	pop           ProofOfPlay
-	assetTTL      time.Duration
-	cacheFn       CacheFunc
-	eventFn       EventFunc
-	lock          sync.RWMutex
-	inProgressAds map[string]Ad
+	httpClient     *http.Client
+	pop            ProofOfPlay
+	assetTTL       time.Duration
+	cacheFn        CacheFunc
+	eventFn        EventFunc
+	lock           sync.RWMutex
+	inProgressAds  map[string]Ad
+	bandwidthStats map[string]interface{}
+	statsLock      sync.RWMutex
 }
 
 func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
@@ -50,17 +53,26 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 	httpClient := &http.Client{Timeout: reqTimeout}
 	pop := NewProofOfPlay(eventFn)
 	return &client{
-		pop:           pop,
-		assetTTL:      assetTTL,
-		httpClient:    httpClient,
-		eventFn:       eventFn,
-		cacheFn:       cacheFn,
-		inProgressAds: make(map[string]Ad),
+		pop:            pop,
+		assetTTL:       assetTTL,
+		httpClient:     httpClient,
+		eventFn:        eventFn,
+		cacheFn:        cacheFn,
+		inProgressAds:  make(map[string]Ad),
+		bandwidthStats: make(map[string]interface{}),
 	}
 }
 
 func (c *client) Close() {
 	c.pop.Stop()
+}
+
+func (c *client) GetStats() map[string]interface{} {
+	c.statsLock.Lock()
+	defer c.statsLock.Unlock()
+
+	c.bandwidthStats["pop"] = c.pop.GetStats()
+	return c.bandwidthStats
 }
 
 func (c *client) GetInProgressAds() map[string]Ad {
@@ -155,6 +167,8 @@ func (c *client) post(url string, config AdConfig, req *AdRequest) (
 
 	hreq.Header.Set("Content-Type", "application/json")
 	resp, err := c.httpClient.Do(hreq)
+	defer c.updateBandwidthStats(
+		url, getRequestLength(hreq), getResponseLength(resp))
 	if err != nil {
 		return nil, err
 	}
@@ -238,4 +252,23 @@ func (c client) publishEvent(name string, message string, level string) {
 		return
 	}
 	c.eventFn(name, message, "", level)
+}
+
+func (c *client) updateBandwidthStats(url string, sentBytes int64,
+	receivedBytes int64) {
+	c.statsLock.Lock()
+	defer c.statsLock.Unlock()
+
+	urlStats, ok := c.bandwidthStats[url].(Stats)
+	if !ok {
+		urlStats = Stats{}
+	}
+
+	urlStats.BytesSent += sentBytes
+	urlStats.BytesReceived += receivedBytes
+	urlStats.Count += 1
+	urlStats.Total = urlStats.BytesSent + urlStats.BytesReceived
+	urlStats.Average = calcAverage(urlStats.Total, urlStats.Count)
+
+	c.bandwidthStats[url] = urlStats
 }

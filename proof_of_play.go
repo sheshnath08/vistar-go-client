@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io/ioutil"
 	"net/http"
+	"sync"
 	"time"
 )
 
@@ -20,6 +21,7 @@ type ProofOfPlay interface {
 	Expire(Ad) error
 	Confirm(Ad, int64) error
 	Stop()
+	GetStats() interface{}
 }
 
 type PoPRequest struct {
@@ -39,12 +41,16 @@ func (e *PoPError) Error() string {
 }
 
 type testProofOfPlay struct {
-	requests   []*PoPRequest
-	retryQueue []*PoPRequest
+	requests       []*PoPRequest
+	retryQueue     []*PoPRequest
+	bandwidthStats *Stats
 }
 
 func NewTestProofOfPlay() *testProofOfPlay {
-	return &testProofOfPlay{requests: make([]*PoPRequest, 0, 0)}
+	return &testProofOfPlay{
+		requests:       make([]*PoPRequest, 0, 0),
+		bandwidthStats: &Stats{},
+	}
 }
 
 func (t *testProofOfPlay) Stop() {
@@ -62,20 +68,27 @@ func (t *testProofOfPlay) Expire(ad Ad) error {
 	return nil
 }
 
+func (t *testProofOfPlay) GetStats() interface{} {
+	return t.bandwidthStats
+}
+
 type proofOfPlay struct {
-	eventFn    EventFunc
-	httpClient *http.Client
-	requests   chan *PoPRequest
-	retryQueue chan *PoPRequest
+	eventFn        EventFunc
+	httpClient     *http.Client
+	requests       chan *PoPRequest
+	retryQueue     chan *PoPRequest
+	bandwidthStats *Stats
+	statsLock      sync.RWMutex
 }
 
 func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
 	httpClient := &http.Client{Timeout: PoPRequestTimeout}
 	pop := &proofOfPlay{
-		eventFn:    eventFn,
-		httpClient: httpClient,
-		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, 100),
+		eventFn:        eventFn,
+		httpClient:     httpClient,
+		requests:       make(chan *PoPRequest, 100),
+		retryQueue:     make(chan *PoPRequest, 100),
+		bandwidthStats: &Stats{},
 	}
 
 	go pop.start()
@@ -96,6 +109,13 @@ func (p *proofOfPlay) Expire(ad Ad) error {
 func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
 	req := &PoPRequest{Ad: ad, Status: true, DisplayTime: displayTime}
 	return p.confirm(req)
+}
+
+func (p *proofOfPlay) GetStats() interface{} {
+	p.statsLock.Lock()
+	defer p.statsLock.Unlock()
+
+	return p.bandwidthStats
 }
 
 func (p *proofOfPlay) start() {
@@ -133,6 +153,7 @@ func (p proofOfPlay) publishEvent(name string, message string, level string) {
 func (p *proofOfPlay) makePoPRequest(req *http.Request,
 	popReq *PoPRequest, adId string, popType string) error {
 	resp, err := p.httpClient.Do(req)
+	defer p.updateBandwidthStats(getRequestLength(req), getResponseLength(resp))
 	if err != nil {
 		// Connection error - retry the request
 		p.processRequestFailure(popReq, err)
@@ -286,4 +307,18 @@ func (p proofOfPlay) getPoPType(req *PoPRequest) string {
 		return "pop"
 	}
 	return "expire"
+}
+
+func (p *proofOfPlay) updateBandwidthStats(sentBytes int64,
+	receivedBytes int64) {
+	p.statsLock.Lock()
+	defer p.statsLock.Unlock()
+
+	p.bandwidthStats.BytesSent += sentBytes
+	p.bandwidthStats.BytesReceived += receivedBytes
+	p.bandwidthStats.Count += 1
+	p.bandwidthStats.Total = p.bandwidthStats.BytesSent +
+		p.bandwidthStats.BytesReceived
+	p.bandwidthStats.Average = calcAverage(
+		p.bandwidthStats.Total, p.bandwidthStats.Count)
 }

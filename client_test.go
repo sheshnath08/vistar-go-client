@@ -159,3 +159,33 @@ func TestTryToExpireAds(t *testing.T) {
 	assert.Len(t, pop.requests, 1)
 	assert.Equal(t, pop.requests[0].Ad["asset_url"], "url1")
 }
+
+func TestUpdateBandwidthStats(t *testing.T) {
+	pop := NewTestProofOfPlay()
+	client := &client{
+		pop:            pop,
+		bandwidthStats: make(map[string]interface{}),
+	}
+
+	client.updateBandwidthStats("/test", int64(100), int64(1024))
+
+	stats, ok := client.bandwidthStats["/test"].(Stats)
+	assert.True(t, ok)
+
+	assert.Equal(t, stats.Count, int64(1))
+	assert.Equal(t, stats.BytesSent, int64(100))
+	assert.Equal(t, stats.BytesReceived, int64(1024))
+	assert.Equal(t, stats.Total, int64(1124))
+	assert.Equal(t, stats.Average, "1124.00")
+
+	client.updateBandwidthStats("/test", int64(100), int64(1024))
+
+	stats, ok = client.bandwidthStats["/test"].(Stats)
+
+	assert.True(t, ok)
+	assert.Equal(t, stats.Count, int64(2))
+	assert.Equal(t, stats.BytesSent, int64(200))
+	assert.Equal(t, stats.BytesReceived, int64(2048))
+	assert.Equal(t, stats.Total, int64(2248))
+	assert.Equal(t, stats.Average, "1124.00")
+}

@@ -114,9 +114,10 @@ func TestMakePoPRequestOKResponse(t *testing.T) {
 	})
 
 	pop := &proofOfPlay{
-		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, 100),
-		httpClient: client,
+		requests:       make(chan *PoPRequest, 100),
+		retryQueue:     make(chan *PoPRequest, 100),
+		httpClient:     client,
+		bandwidthStats: &Stats{},
 	}
 
 	defer pop.Stop()
@@ -130,6 +131,8 @@ func TestMakePoPRequestOKResponse(t *testing.T) {
 
 	err := pop.makePoPRequest(req, popReq, adId, "pop")
 	assert.Nil(t, err)
+
+	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
 }
 
 func TestMakePoPRequest400Response(t *testing.T) {
@@ -142,9 +145,10 @@ func TestMakePoPRequest400Response(t *testing.T) {
 	})
 
 	pop := &proofOfPlay{
-		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, 100),
-		httpClient: client,
+		requests:       make(chan *PoPRequest, 100),
+		retryQueue:     make(chan *PoPRequest, 100),
+		httpClient:     client,
+		bandwidthStats: &Stats{},
 	}
 
 	defer pop.Stop()
@@ -161,6 +165,8 @@ func TestMakePoPRequest400Response(t *testing.T) {
 	assert.Equal(t, popErr.Status, http.StatusBadRequest)
 	assert.Len(t, pop.retryQueue, 0)
 	assert.Len(t, pop.requests, 0)
+
+	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
 }
 
 func TestMakePoPRequest500Response(t *testing.T) {
@@ -173,9 +179,10 @@ func TestMakePoPRequest500Response(t *testing.T) {
 	})
 
 	pop := &proofOfPlay{
-		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, 100),
-		httpClient: client,
+		requests:       make(chan *PoPRequest, 100),
+		retryQueue:     make(chan *PoPRequest, 100),
+		httpClient:     client,
+		bandwidthStats: &Stats{},
 	}
 
 	defer pop.Stop()
@@ -192,6 +199,8 @@ func TestMakePoPRequest500Response(t *testing.T) {
 	assert.Equal(t, popErr.Status, http.StatusAccepted)
 
 	assert.Len(t, pop.retryQueue, 1)
+
+	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
 }
 
 func TestMakePoPRequestErrors(t *testing.T) {
@@ -200,9 +209,10 @@ func TestMakePoPRequestErrors(t *testing.T) {
 	})
 
 	pop := &proofOfPlay{
-		requests:   make(chan *PoPRequest, 100),
-		retryQueue: make(chan *PoPRequest, 100),
-		httpClient: client,
+		requests:       make(chan *PoPRequest, 100),
+		retryQueue:     make(chan *PoPRequest, 100),
+		httpClient:     client,
+		bandwidthStats: &Stats{},
 	}
 
 	defer pop.Stop()
@@ -219,4 +229,30 @@ func TestMakePoPRequestErrors(t *testing.T) {
 	assert.Equal(t, popErr.Status, http.StatusAccepted)
 
 	assert.Len(t, pop.retryQueue, 1)
+
+	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
+}
+
+func TestPopUpdateBandwidthStats(t *testing.T) {
+	pop := &proofOfPlay{
+		bandwidthStats: &Stats{},
+	}
+
+	pop.updateBandwidthStats(int64(100), int64(1024))
+
+	stats := pop.bandwidthStats
+
+	assert.Equal(t, stats.Count, int64(1))
+	assert.Equal(t, stats.BytesSent, int64(100))
+	assert.Equal(t, stats.BytesReceived, int64(1024))
+	assert.Equal(t, stats.Total, int64(1124))
+	assert.Equal(t, stats.Average, "1124.00")
+
+	pop.updateBandwidthStats(int64(100), int64(1024))
+
+	assert.Equal(t, stats.Count, int64(2))
+	assert.Equal(t, stats.BytesSent, int64(200))
+	assert.Equal(t, stats.BytesReceived, int64(2048))
+	assert.Equal(t, stats.Total, int64(2248))
+	assert.Equal(t, stats.Average, "1124.00")
 }
