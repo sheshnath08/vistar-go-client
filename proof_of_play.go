@@ -21,7 +21,7 @@ type ProofOfPlay interface {
 	Expire(Ad) error
 	Confirm(Ad, int64) error
 	Stop()
-	GetStats() interface{}
+	GetStats() Stats
 }
 
 type PoPRequest struct {
@@ -68,8 +68,8 @@ func (t *testProofOfPlay) Expire(ad Ad) error {
 	return nil
 }
 
-func (t *testProofOfPlay) GetStats() interface{} {
-	return t.bandwidthStats
+func (t *testProofOfPlay) GetStats() Stats {
+	return *t.bandwidthStats
 }
 
 type proofOfPlay struct {
@@ -77,8 +77,8 @@ type proofOfPlay struct {
 	httpClient     *http.Client
 	requests       chan *PoPRequest
 	retryQueue     chan *PoPRequest
-	bandwidthStats *Stats
 	statsLock      sync.RWMutex
+	bandwidthStats *Stats
 }
 
 func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
@@ -111,11 +111,11 @@ func (p *proofOfPlay) Confirm(ad Ad, displayTime int64) error {
 	return p.confirm(req)
 }
 
-func (p *proofOfPlay) GetStats() interface{} {
+func (p *proofOfPlay) GetStats() Stats {
 	p.statsLock.Lock()
 	defer p.statsLock.Unlock()
 
-	return p.bandwidthStats
+	return *p.bandwidthStats
 }
 
 func (p *proofOfPlay) start() {
@@ -153,7 +153,6 @@ func (p proofOfPlay) publishEvent(name string, message string, level string) {
 func (p *proofOfPlay) makePoPRequest(req *http.Request,
 	popReq *PoPRequest, adId string, popType string) error {
 	resp, err := p.httpClient.Do(req)
-	defer p.updateBandwidthStats(getRequestLength(req), getResponseLength(resp))
 	if err != nil {
 		// Connection error - retry the request
 		p.processRequestFailure(popReq, err)
@@ -165,6 +164,8 @@ func (p *proofOfPlay) makePoPRequest(req *http.Request,
 	}
 
 	defer resp.Body.Close()
+
+	p.updateBandwidthStats(getRequestLength(req), getResponseLength(resp))
 
 	code := resp.StatusCode
 	// Response was OK: 1xx - 3xx
@@ -319,6 +320,6 @@ func (p *proofOfPlay) updateBandwidthStats(sentBytes int64,
 	p.bandwidthStats.Count += 1
 	p.bandwidthStats.Total = p.bandwidthStats.BytesSent +
 		p.bandwidthStats.BytesReceived
-	p.bandwidthStats.Average = calcAverage(
-		p.bandwidthStats.Total, p.bandwidthStats.Count)
+	p.bandwidthStats.Average = float64(p.bandwidthStats.Total) /
+		float64(p.bandwidthStats.Count)
 }

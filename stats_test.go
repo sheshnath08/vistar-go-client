@@ -10,11 +10,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestCalAverage(t *testing.T) {
-	assert.Equal(t, calcAverage(int64(100), int64(3)), "33.33")
-	assert.Equal(t, calcAverage(int64(100), int64(10)), "10.00")
-}
-
 func TestGetRequestLength(t *testing.T) {
 	data := []byte("this is test")
 

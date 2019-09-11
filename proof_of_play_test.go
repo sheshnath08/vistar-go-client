@@ -230,7 +230,7 @@ func TestMakePoPRequestErrors(t *testing.T) {
 
 	assert.Len(t, pop.retryQueue, 1)
 
-	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
+	assert.Equal(t, pop.bandwidthStats.Count, int64(0))
 }
 
 func TestPopUpdateBandwidthStats(t *testing.T) {
@@ -246,7 +246,7 @@ func TestPopUpdateBandwidthStats(t *testing.T) {
 	assert.Equal(t, stats.BytesSent, int64(100))
 	assert.Equal(t, stats.BytesReceived, int64(1024))
 	assert.Equal(t, stats.Total, int64(1124))
-	assert.Equal(t, stats.Average, "1124.00")
+	assert.Equal(t, stats.Average, float64(1124))
 
 	pop.updateBandwidthStats(int64(100), int64(1024))
 
@@ -254,5 +254,5 @@ func TestPopUpdateBandwidthStats(t *testing.T) {
 	assert.Equal(t, stats.BytesSent, int64(200))
 	assert.Equal(t, stats.BytesReceived, int64(2048))
 	assert.Equal(t, stats.Total, int64(2248))
-	assert.Equal(t, stats.Average, "1124.00")
+	assert.Equal(t, stats.Average, float64(1124))
 }
