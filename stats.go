@@ -1,9 +1,9 @@
 package vistar
 
 import (
-	"encoding/json"
 	"net/http"
 	"net/http/httputil"
+	"strings"
 )
 
 type Stats struct {
@@ -31,12 +31,14 @@ func getRequestLength(req *http.Request) int64 {
 		return 0
 	}
 
-	header, err := json.Marshal(req.Header)
-	if err != nil {
-		return req.ContentLength
+	headerLength := 0
+
+	for k, v := range req.Header {
+		headerLength += len(k)
+		headerLength += len(strings.Join(v[:], ","))
 	}
 
-	return req.ContentLength + int64(len(header))
+	return req.ContentLength + int64(headerLength)
 }
 
 func updateStats(stats *Stats, bytesSent int64, bytesReceived int64) {

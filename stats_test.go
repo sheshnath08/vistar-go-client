@@ -16,10 +16,11 @@ func TestGetRequestLength(t *testing.T) {
 	req := httptest.NewRequest(
 		"GET", "http://example.com/foo", bytes.NewBuffer(data))
 
-	assert.Equal(t, getRequestLength(req), int64(14))
+	assert.Equal(t, getRequestLength(req), int64(len(data)))
 
 	req.Header.Set("Content-Type", "application/json")
-	assert.Equal(t, getRequestLength(req), int64(49))
+	// headers length (28) + content length (12)
+	assert.Equal(t, getRequestLength(req), int64(40))
 
 }
 
@@ -36,10 +37,12 @@ func TestGetResponseLength(t *testing.T) {
 
 	resp := w.Result()
 
+	// resp:= HTTP/1.1 200 OK
+	// Connection: close
+	// Content-Type: text/html; charset=utf-8
+	// <html><body>Hello World!</body></html>
 	assert.Equal(t, getResponseLength(resp), int64(116))
 }
-
-
 
 func TestUpdateStats(t *testing.T) {
 	stats := Stats{}
