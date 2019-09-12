@@ -19,7 +19,8 @@ func TestGetRequestLength(t *testing.T) {
 	assert.Equal(t, getRequestLength(req), int64(len(data)))
 
 	req.Header.Set("Content-Type", "application/json")
-	// headers length (28) + content length (12)
+
+	// Header length is 28 and content length is 12 hence total is 40
 	assert.Equal(t, getRequestLength(req), int64(40))
 
 }
@@ -37,7 +38,8 @@ func TestGetResponseLength(t *testing.T) {
 
 	resp := w.Result()
 
-	// resp:= HTTP/1.1 200 OK
+	// Response length is 116 and it looks like following:
+	// HTTP/1.1 200 OK
 	// Connection: close
 	// Content-Type: text/html; charset=utf-8
 	// <html><body>Hello World!</body></html>
