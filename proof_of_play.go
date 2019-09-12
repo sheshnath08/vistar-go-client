@@ -43,13 +43,13 @@ func (e *PoPError) Error() string {
 type testProofOfPlay struct {
 	requests       []*PoPRequest
 	retryQueue     []*PoPRequest
-	bandwidthStats *Stats
+	bandwidthStats Stats
 }
 
 func NewTestProofOfPlay() *testProofOfPlay {
 	return &testProofOfPlay{
 		requests:       make([]*PoPRequest, 0, 0),
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 }
 
@@ -69,7 +69,7 @@ func (t *testProofOfPlay) Expire(ad Ad) error {
 }
 
 func (t *testProofOfPlay) GetStats() Stats {
-	return *t.bandwidthStats
+	return t.bandwidthStats
 }
 
 type proofOfPlay struct {
@@ -78,7 +78,7 @@ type proofOfPlay struct {
 	requests       chan *PoPRequest
 	retryQueue     chan *PoPRequest
 	statsLock      sync.RWMutex
-	bandwidthStats *Stats
+	bandwidthStats Stats
 }
 
 func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
@@ -88,7 +88,7 @@ func NewProofOfPlay(eventFn EventFunc) *proofOfPlay {
 		httpClient:     httpClient,
 		requests:       make(chan *PoPRequest, 100),
 		retryQueue:     make(chan *PoPRequest, 100),
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	go pop.start()
@@ -115,7 +115,7 @@ func (p *proofOfPlay) GetStats() Stats {
 	p.statsLock.Lock()
 	defer p.statsLock.Unlock()
 
-	return *p.bandwidthStats
+	return p.bandwidthStats
 }
 
 func (p *proofOfPlay) start() {
@@ -315,11 +315,5 @@ func (p *proofOfPlay) updateBandwidthStats(sentBytes int64,
 	p.statsLock.Lock()
 	defer p.statsLock.Unlock()
 
-	p.bandwidthStats.BytesSent += sentBytes
-	p.bandwidthStats.BytesReceived += receivedBytes
-	p.bandwidthStats.Count += 1
-	p.bandwidthStats.Total = p.bandwidthStats.BytesSent +
-		p.bandwidthStats.BytesReceived
-	p.bandwidthStats.Average = float64(p.bandwidthStats.Total) /
-		float64(p.bandwidthStats.Count)
+	updateStats(&p.bandwidthStats, sentBytes, receivedBytes)
 }

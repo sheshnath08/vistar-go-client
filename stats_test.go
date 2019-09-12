@@ -38,3 +38,23 @@ func TestGetResponseLength(t *testing.T) {
 
 	assert.Equal(t, getResponseLength(resp), int64(116))
 }
+
+
+
+func TestUpdateStats(t *testing.T) {
+	stats := Stats{}
+
+	updateStats(&stats, 100, 1024)
+	assert.Equal(t, stats.Count, int64(1))
+	assert.Equal(t, stats.BytesSent, int64(100))
+	assert.Equal(t, stats.BytesReceived, int64(1024))
+	assert.Equal(t, stats.Total, int64(1124))
+	assert.Equal(t, stats.Average, float64(1124))
+
+	updateStats(&stats, 50, 2048)
+	assert.Equal(t, stats.Count, int64(2))
+	assert.Equal(t, stats.BytesSent, int64(150))
+	assert.Equal(t, stats.BytesReceived, int64(3072))
+	assert.Equal(t, stats.Total, int64(3222))
+	assert.Equal(t, stats.Average, float64(1611))
+}

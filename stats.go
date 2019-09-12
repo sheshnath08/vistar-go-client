@@ -38,3 +38,11 @@ func getRequestLength(req *http.Request) int64 {
 
 	return req.ContentLength + int64(len(header))
 }
+
+func updateStats(stats *Stats, bytesSent int64, bytesReceived int64) {
+	stats.BytesSent += bytesSent
+	stats.BytesReceived += bytesReceived
+	stats.Count += 1
+	stats.Total = stats.BytesSent + stats.BytesReceived
+	stats.Average = float64(stats.Total) / float64(stats.Count)
+}

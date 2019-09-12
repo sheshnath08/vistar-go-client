@@ -261,12 +261,6 @@ func (c *client) updateBandwidthStats(url string, sentBytes int64,
 	defer c.statsLock.Unlock()
 
 	urlStats := c.bandwidthStats[url]
-
-	urlStats.BytesSent += sentBytes
-	urlStats.BytesReceived += receivedBytes
-	urlStats.Count += 1
-	urlStats.Total = urlStats.BytesSent + urlStats.BytesReceived
-	urlStats.Average = float64(urlStats.Total) / float64(urlStats.Count)
-
+	updateStats(&urlStats, sentBytes, receivedBytes)
 	c.bandwidthStats[url] = urlStats
 }

@@ -117,7 +117,7 @@ func TestMakePoPRequestOKResponse(t *testing.T) {
 		requests:       make(chan *PoPRequest, 100),
 		retryQueue:     make(chan *PoPRequest, 100),
 		httpClient:     client,
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	defer pop.Stop()
@@ -148,7 +148,7 @@ func TestMakePoPRequest400Response(t *testing.T) {
 		requests:       make(chan *PoPRequest, 100),
 		retryQueue:     make(chan *PoPRequest, 100),
 		httpClient:     client,
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	defer pop.Stop()
@@ -182,7 +182,7 @@ func TestMakePoPRequest500Response(t *testing.T) {
 		requests:       make(chan *PoPRequest, 100),
 		retryQueue:     make(chan *PoPRequest, 100),
 		httpClient:     client,
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	defer pop.Stop()
@@ -212,7 +212,7 @@ func TestMakePoPRequestErrors(t *testing.T) {
 		requests:       make(chan *PoPRequest, 100),
 		retryQueue:     make(chan *PoPRequest, 100),
 		httpClient:     client,
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	defer pop.Stop()
@@ -235,24 +235,22 @@ func TestMakePoPRequestErrors(t *testing.T) {
 
 func TestPopUpdateBandwidthStats(t *testing.T) {
 	pop := &proofOfPlay{
-		bandwidthStats: &Stats{},
+		bandwidthStats: Stats{},
 	}
 
 	pop.updateBandwidthStats(int64(100), int64(1024))
 
-	stats := pop.bandwidthStats
-
-	assert.Equal(t, stats.Count, int64(1))
-	assert.Equal(t, stats.BytesSent, int64(100))
-	assert.Equal(t, stats.BytesReceived, int64(1024))
-	assert.Equal(t, stats.Total, int64(1124))
-	assert.Equal(t, stats.Average, float64(1124))
+	assert.Equal(t, pop.bandwidthStats.Count, int64(1))
+	assert.Equal(t, pop.bandwidthStats.BytesSent, int64(100))
+	assert.Equal(t, pop.bandwidthStats.BytesReceived, int64(1024))
+	assert.Equal(t, pop.bandwidthStats.Total, int64(1124))
+	assert.Equal(t, pop.bandwidthStats.Average, float64(1124))
 
 	pop.updateBandwidthStats(int64(100), int64(1024))
 
-	assert.Equal(t, stats.Count, int64(2))
-	assert.Equal(t, stats.BytesSent, int64(200))
-	assert.Equal(t, stats.BytesReceived, int64(2048))
-	assert.Equal(t, stats.Total, int64(2248))
-	assert.Equal(t, stats.Average, float64(1124))
+	assert.Equal(t, pop.bandwidthStats.Count, int64(2))
+	assert.Equal(t, pop.bandwidthStats.BytesSent, int64(200))
+	assert.Equal(t, pop.bandwidthStats.BytesReceived, int64(2048))
+	assert.Equal(t, pop.bandwidthStats.Total, int64(2248))
+	assert.Equal(t, pop.bandwidthStats.Average, float64(1124))
 }
