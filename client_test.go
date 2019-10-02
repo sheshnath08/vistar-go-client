@@ -160,6 +160,26 @@ func TestTryToExpireAds(t *testing.T) {
 	assert.Equal(t, pop.requests[0].Ad["asset_url"], "url1")
 }
 
+func TestHidePopUrl(t *testing.T)  {
+	resp := &AdResponse{
+		Advertisement: []Ad{
+			map[string]interface{}{"id": "1", "asset_url": "url1",
+				"proof_of_play_url": "http://pop-url"},
+			map[string]interface{}{"id": "2", "asset_url": "url2"},
+		},
+	}
+
+	pop := NewTestProofOfPlay()
+	client := &client{pop: pop}
+
+	nresp := client.hidePopUrl(resp)
+	assert.Len(t, nresp.Advertisement, 2)
+	assert.Equal(t, nresp.Advertisement[0]["id"], "1")
+	assert.NotContains(t, nresp.Advertisement[0], "proof_of_play_url")
+	assert.Equal(t, nresp.Advertisement[1]["id"], "2")
+	assert.NotContains(t, nresp.Advertisement[1], "proof_of_play_url")
+}
+
 func TestUpdateBandwidthStats(t *testing.T) {
 	pop := NewTestProofOfPlay()
 	client := &client{
