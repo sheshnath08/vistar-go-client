@@ -236,7 +236,7 @@ func (c *client) hidePopUrl(resp *AdResponse) *AdResponse{
 	for _, ad := range resp.Advertisement {
 		processedAd := make(Ad)
 		for key, value := range ad {
-			if key == "proof_of_play_url" {
+			if key == "proof_of_play_url" || key == "expiration_url" {
 				continue
 			}
 			processedAd[key] = value

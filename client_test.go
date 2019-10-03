@@ -165,7 +165,11 @@ func TestHidePopUrl(t *testing.T)  {
 		Advertisement: []Ad{
 			map[string]interface{}{"id": "1", "asset_url": "url1",
 				"proof_of_play_url": "http://pop-url"},
-			map[string]interface{}{"id": "2", "asset_url": "url2"},
+			map[string]interface{}{"id": "2", "asset_url": "url2",
+				"expiration_url": "http://exire-url"},
+			map[string]interface{}{"id": "3", "asset_url": "url2",
+				"expiration_url": "http://exire-url",
+				"proof_of_play_url": "http://pop-url"},
 		},
 	}
 
@@ -173,11 +177,16 @@ func TestHidePopUrl(t *testing.T)  {
 	client := &client{pop: pop}
 
 	nresp := client.hidePopUrl(resp)
-	assert.Len(t, nresp.Advertisement, 2)
+	assert.Len(t, nresp.Advertisement, 3)
 	assert.Equal(t, nresp.Advertisement[0]["id"], "1")
 	assert.NotContains(t, nresp.Advertisement[0], "proof_of_play_url")
+	assert.NotContains(t, nresp.Advertisement[0], "expiration_url")
 	assert.Equal(t, nresp.Advertisement[1]["id"], "2")
 	assert.NotContains(t, nresp.Advertisement[1], "proof_of_play_url")
+	assert.NotContains(t, nresp.Advertisement[1], "expiration_url")
+	assert.Equal(t, nresp.Advertisement[2]["id"], "3")
+	assert.NotContains(t, nresp.Advertisement[2], "proof_of_play_url")
+	assert.NotContains(t, nresp.Advertisement[2], "expiration_url")
 }
 
 func TestUpdateBandwidthStats(t *testing.T) {
