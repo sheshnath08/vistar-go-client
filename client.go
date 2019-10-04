@@ -235,7 +235,7 @@ func (c *client) tryToExpireAds(resp *AdResponse) *AdResponse {
 	return cleaned
 }
 
-func (c *client) hidePopUrl(resp *AdResponse) *AdResponse{
+func (c *client) hidePopUrl(resp *AdResponse) *AdResponse {
 	response := &AdResponse{}
 	for _, ad := range resp.Advertisement {
 		processedAd := make(Ad)
@@ -286,18 +286,26 @@ func (c *client) updateBandwidthStats(url string, sentBytes int64,
 
 func (c *client) processExpiredAds() {
 	ticker := time.NewTicker(ProcessExpiredAdInterval)
-	for range ticker.C {
-		for adId, ad := range c.inProgressAds {
-			leaseExpirySecond, ok := ad["lease_expiry"]
-			if !ok {
-				continue
-			}
 
-			// We are drop this ad and not expiring, because
-			// ad server expires them automatically after 24hrs
-			if int64(leaseExpirySecond.(float64)) < time.Now().Unix() {
-				c.removeFromInProgressList(adId)
-			}
+	for range ticker.C {
+		c.removeExpiredAds()
+	}
+}
+
+func (c *client) removeExpiredAds() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for adId, ad := range c.inProgressAds {
+		leaseExpirySecond, ok := ad["lease_expiry"]
+		if !ok {
+			continue
+		}
+
+		// We are dropping the expired ad here and not expiring,
+		// because ad server expires them automatically after 24hrs.
+		if int64(leaseExpirySecond.(float64)) < time.Now().Unix() {
+			delete(c.inProgressAds, adId)
 		}
 	}
 }

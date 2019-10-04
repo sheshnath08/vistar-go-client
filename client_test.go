@@ -160,16 +160,25 @@ func TestTryToExpireAds(t *testing.T) {
 	assert.Equal(t, pop.requests[0].Ad["asset_url"], "url1")
 }
 
-func TestHidePopUrl(t *testing.T)  {
+func TestHidePopUrl(t *testing.T) {
 	resp := &AdResponse{
 		Advertisement: []Ad{
-			map[string]interface{}{"id": "1", "asset_url": "url1",
-				"proof_of_play_url": "http://pop-url"},
-			map[string]interface{}{"id": "2", "asset_url": "url2",
-				"expiration_url": "http://exire-url"},
-			map[string]interface{}{"id": "3", "asset_url": "url2",
+			map[string]interface{}{
+				"id":                "1",
+				"asset_url":         "url1",
+				"proof_of_play_url": "http://pop-url",
+			},
+			map[string]interface{}{
+				"id":             "2",
+				"asset_url":      "url2",
 				"expiration_url": "http://exire-url",
-				"proof_of_play_url": "http://pop-url"},
+			},
+			map[string]interface{}{
+				"id":                "3",
+				"asset_url":         "url2",
+				"expiration_url":    "http://exire-url",
+				"proof_of_play_url": "http://pop-url",
+			},
 		},
 	}
 
@@ -187,6 +196,35 @@ func TestHidePopUrl(t *testing.T)  {
 	assert.Equal(t, nresp.Advertisement[2]["id"], "3")
 	assert.NotContains(t, nresp.Advertisement[2], "proof_of_play_url")
 	assert.NotContains(t, nresp.Advertisement[2], "expiration_url")
+}
+
+func TestRemoveExpiredAds(t *testing.T) {
+	ad1 := map[string]interface{}{
+		"id":           "1",
+		"asset_url":    "url1",
+		"lease_expiry": float64(12345),
+	}
+	ad2 := map[string]interface{}{
+		"id":           "2",
+		"asset_url":    "url1",
+		"lease_expiry": float64(time.Now().Unix() + int64(1000)),
+	}
+
+	inProgressAds := make(map[string]Ad)
+	inProgressAds[ad1["id"].(string)] = ad1
+	inProgressAds[ad2["id"].(string)] = ad2
+
+	client := &client{
+		inProgressAds: inProgressAds,
+	}
+
+	assert.Equal(t, len(client.inProgressAds), 2)
+
+	client.removeExpiredAds()
+
+	assert.Equal(t, len(client.inProgressAds), 1)
+	assert.NotContains(t, client.inProgressAds, ad1["id"].(string))
+	assert.Contains(t, client.inProgressAds, ad2["id"].(string))
 }
 
 func TestUpdateBandwidthStats(t *testing.T) {
