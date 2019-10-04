@@ -12,6 +12,7 @@ import (
 )
 
 var AdNotFound = errors.New("ad not found")
+var ProcessExpiredAdInterval = 1 * time.Minute
 
 type CacheFunc func(string, time.Duration) (string, error)
 type EventFunc func(string, string, string, string)
@@ -52,7 +53,7 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 	assetTTL time.Duration) *client {
 	httpClient := &http.Client{Timeout: reqTimeout}
 	pop := NewProofOfPlay(eventFn)
-	return &client{
+	c := &client{
 		pop:            pop,
 		assetTTL:       assetTTL,
 		httpClient:     httpClient,
@@ -61,6 +62,9 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 		inProgressAds:  make(map[string]Ad),
 		bandwidthStats: make(map[string]Stats),
 	}
+
+	go c.processExpiredAds()
+	return c
 }
 
 func (c *client) Close() {
@@ -231,7 +235,7 @@ func (c *client) tryToExpireAds(resp *AdResponse) *AdResponse {
 	return cleaned
 }
 
-func (c *client) hidePopUrl(resp *AdResponse) *AdResponse{
+func (c *client) hidePopUrl(resp *AdResponse) *AdResponse {
 	response := &AdResponse{}
 	for _, ad := range resp.Advertisement {
 		processedAd := make(Ad)
@@ -278,4 +282,30 @@ func (c *client) updateBandwidthStats(url string, sentBytes int64,
 	urlStats := c.bandwidthStats[url]
 	updateStats(&urlStats, sentBytes, receivedBytes)
 	c.bandwidthStats[url] = urlStats
+}
+
+func (c *client) processExpiredAds() {
+	ticker := time.NewTicker(ProcessExpiredAdInterval)
+
+	for range ticker.C {
+		c.removeExpiredAds()
+	}
+}
+
+func (c *client) removeExpiredAds() {
+	c.lock.Lock()
+	defer c.lock.Unlock()
+
+	for adId, ad := range c.inProgressAds {
+		leaseExpirySecond, ok := ad["lease_expiry"]
+		if !ok {
+			continue
+		}
+
+		// We are dropping the expired ad here and not expiring,
+		// because ad server expires them automatically after 24hrs.
+		if int64(leaseExpirySecond.(float64)) < time.Now().Unix() {
+			delete(c.inProgressAds, adId)
+		}
+	}
 }
