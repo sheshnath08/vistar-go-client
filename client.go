@@ -129,12 +129,12 @@ func (c *client) GetAd(config AdConfig, req *AdRequest) (
 	}
 
 	if c.cacheFn == nil {
-		return c.hidePopUrl(resp), nil
+		return resp, nil
 	}
 
 	c.cacheAds(resp)
 	cleanedResponse := c.tryToExpireAds(resp)
-	return c.hidePopUrl(cleanedResponse), nil
+	return cleanedResponse, nil
 }
 
 func (c *client) GetAssets(config AdConfig, req *AdRequest) (
@@ -233,21 +233,6 @@ func (c *client) tryToExpireAds(resp *AdResponse) *AdResponse {
 		cleaned.Advertisement = append(cleaned.Advertisement, ad)
 	}
 	return cleaned
-}
-
-func (c *client) hidePopUrl(resp *AdResponse) *AdResponse {
-	response := &AdResponse{}
-	for _, ad := range resp.Advertisement {
-		processedAd := make(Ad)
-		for key, value := range ad {
-			if key == "proof_of_play_url" || key == "expiration_url" {
-				continue
-			}
-			processedAd[key] = value
-		}
-		response.Advertisement = append(response.Advertisement, processedAd)
-	}
-	return response
 }
 
 func (c *client) addToInProgressList(ad Ad) {
