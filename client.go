@@ -12,6 +12,7 @@ import (
 )
 
 var AdNotFound = errors.New("ad not found")
+var MissingRequestData = errors.New("missing request data")
 var ProcessExpiredAdInterval = 1 * time.Minute
 
 type CacheFunc func(string, time.Duration) (string, error)
@@ -28,11 +29,11 @@ type AssetResponse struct {
 }
 
 type Client interface {
-	GetAd(AdConfig, *AdRequest) (*AdResponse, error)
+	GetAd(Request) (*AdResponse, error)
 	Expire(string) error
 	Confirm(string, int64) (string, error)
 	GetInProgressAds() map[string]Ad
-	GetAssets(AdConfig, *AdRequest) (*AssetResponse, error)
+	GetAssets(Request) (*AssetResponse, error)
 	GetStats() map[string]Stats
 	Close()
 }
@@ -110,9 +111,8 @@ func (c *client) Confirm(adId string, displayTime int64) (string, error) {
 	return ad["original_asset_url"].(string), err
 }
 
-func (c *client) GetAd(config AdConfig, req *AdRequest) (
-	*AdResponse, error) {
-	body, err := c.post(config.ServerUrl(), config, req)
+func (c *client) GetAd(request Request) (*AdResponse, error) {
+	body, err := c.post(request.ServerUrl(), request)
 	if err != nil {
 		return nil, err
 	}
@@ -137,9 +137,8 @@ func (c *client) GetAd(config AdConfig, req *AdRequest) (
 	return cleanedResponse, nil
 }
 
-func (c *client) GetAssets(config AdConfig, req *AdRequest) (
-	*AssetResponse, error) {
-	body, err := c.post(config.AssetEndpointUrl(), config, req)
+func (c *client) GetAssets(request Request) (*AssetResponse, error) {
+	body, err := c.post(request.AssetEndpointUrl(), request)
 	if err != nil {
 		return nil, err
 	}
@@ -157,9 +156,13 @@ func (c *client) GetAssets(config AdConfig, req *AdRequest) (
 	return resp, nil
 }
 
-func (c *client) post(url string, config AdConfig, req *AdRequest) (
-	[]byte, error) {
-	data, err := json.Marshal(req)
+func (c *client) post(url string, request Request) ([]byte, error) {
+	reqData := request.Data()
+	if reqData == nil {
+		return nil, MissingRequestData
+	}
+
+	data, err := json.Marshal(reqData)
 	if err != nil {
 		return nil, err
 	}

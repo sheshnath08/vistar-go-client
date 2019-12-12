@@ -1,7 +1,11 @@
 package vistar
 
 import (
+	"encoding/json"
 	"errors"
+	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 	"time"
 
@@ -217,4 +221,173 @@ func TestUpdateBandwidthStats(t *testing.T) {
 	assert.Equal(t, stats.BytesReceived, int64(2048))
 	assert.Equal(t, stats.Total, int64(2248))
 	assert.Equal(t, stats.Average, float64(1124))
+}
+
+func TestPostWithMissingRequestData(t *testing.T) {
+	request := &request{}
+	pop := NewTestProofOfPlay()
+	client := &client{
+		pop: pop,
+	}
+
+	resp, err := client.post("test.com", request)
+
+	assert.Empty(t, resp)
+	assert.Equal(t, err, MissingRequestData)
+}
+
+func TestPostToInvalidRequestUrl(t *testing.T) {
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		}),
+	)
+	defer ts.Close()
+	data := &Data{}
+	request := &request{
+		data: data,
+	}
+	pop := NewTestProofOfPlay()
+	client := &client{
+		pop:        pop,
+		httpClient: ts.Client(),
+	}
+
+	url := fmt.Sprintf("invalid%s", ts.URL)
+
+	resp, err := client.post(url, request)
+
+	assert.Empty(t, resp)
+	assert.NotEmpty(t, err)
+	assert.Equal(t, err.Error(),
+		fmt.Sprintf("Post %s: unsupported protocol scheme \"invalidhttp\"",
+			url))
+}
+
+func TestPostServerReturnHttpError(t *testing.T) {
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+		}),
+	)
+	defer ts.Close()
+
+	data := &Data{}
+	request := &request{
+		data: data,
+	}
+	pop := NewTestProofOfPlay()
+
+	client := &client{
+		pop:            pop,
+		httpClient:     ts.Client(),
+		bandwidthStats: make(map[string]Stats),
+	}
+
+	resp, err := client.post(ts.URL, request)
+
+	expectedErrorMessage := fmt.Sprintf(
+		"Ad server returned an error. url: %s, code: %d, body: ",
+		ts.URL, http.StatusBadRequest)
+
+	assert.Empty(t, resp)
+	assert.NotEmpty(t, err)
+	assert.Equal(t, err.Error(), expectedErrorMessage)
+}
+
+func TestPostServerReturnedHttpOK(t *testing.T) {
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			w.Write([]byte("Success!"))
+		}),
+	)
+	defer ts.Close()
+
+	data := &Data{}
+	request := &request{
+		data: data,
+	}
+	pop := NewTestProofOfPlay()
+
+	client := &client{
+		pop:            pop,
+		httpClient:     ts.Client(),
+		bandwidthStats: make(map[string]Stats),
+	}
+
+	resp, err := client.post(ts.URL, request)
+
+	assert.NotEmpty(t, resp)
+	assert.Empty(t, err)
+	assert.Equal(t, string(resp), "Success!")
+}
+
+func TestGetAdReturnsErrorWhenServerReturnsError(t *testing.T) {
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusBadRequest)
+		}),
+	)
+	defer ts.Close()
+
+	data := &Data{}
+	request := &request{
+		url:  ts.URL,
+		data: data,
+	}
+	pop := NewTestProofOfPlay()
+
+	client := &client{
+		pop:            pop,
+		httpClient:     ts.Client(),
+		bandwidthStats: make(map[string]Stats),
+	}
+
+	resp, err := client.GetAd(request)
+
+	expectedErrorMessage := fmt.Sprintf(
+		"Ad server returned an error. url: %s, code: %d, body: ",
+		ts.URL, http.StatusBadRequest)
+
+	assert.Empty(t, resp)
+	assert.NotEmpty(t, err)
+	assert.Equal(t, err.Error(), expectedErrorMessage)
+}
+
+func TestGetAdReturnsAd(t *testing.T) {
+	adResponse := &AdResponse{
+		[]Ad{
+			{
+				"id":        float64(1),
+				"asset-url": "asset-url.ad-server.com",
+			},
+		},
+	}
+
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			response, _ := json.Marshal(adResponse)
+			w.Write(response)
+		}),
+	)
+	defer ts.Close()
+
+	data := &Data{}
+	request := &request{
+		url:  ts.URL,
+		data: data,
+	}
+	pop := NewTestProofOfPlay()
+	client := &client{
+		pop:            pop,
+		httpClient:     ts.Client(),
+		bandwidthStats: make(map[string]Stats),
+	}
+
+	resp, err := client.GetAd(request)
+
+	assert.NotEmpty(t, resp)
+	assert.Equal(t, resp, adResponse)
+	assert.Empty(t, err)
 }
