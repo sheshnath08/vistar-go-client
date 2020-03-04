@@ -106,8 +106,12 @@ func (c *adConfig) UpdateAdRequest(req *AdRequest) {
 	req.DeviceId = c.baseRequest.DeviceId
 	req.VenueId = c.baseRequest.VenueId
 	req.DirectConnection = c.baseRequest.DirectConnection
-	req.Latitude = c.baseRequest.Latitude
-	req.Longitude = c.baseRequest.Longitude
+	if req.Latitude == 0 {
+		req.Latitude = c.baseRequest.Latitude
+	}
+	if req.Longitude == 0 {
+		req.Longitude = c.baseRequest.Longitude
+	}
 	req.NumberOfScreens = c.baseRequest.NumberOfScreens
 	req.RequiredCompletion = c.baseRequest.RequiredCompletion
 	req.Duration = c.baseRequest.Duration
