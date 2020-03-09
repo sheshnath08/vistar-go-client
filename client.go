@@ -154,11 +154,14 @@ func (c *client) GetAd(request Request) (*AdResponse, error) {
 		return resp, nil
 	}
 
-	if c.cacheFn == nil {
-		return resp, nil
+	if c.cacheFn != nil {
+		c.cacheAds(resp)
+	} else {
+		for _, ad := range resp.Advertisement {
+			c.addToInProgressList(ad)
+		}
 	}
 
-	c.cacheAds(resp)
 	cleanedResponse := c.tryToExpireAds(resp)
 	return cleanedResponse, nil
 }
@@ -327,15 +330,4 @@ func (c *client) removeExpiredAds() {
 			delete(c.inProgressAds, adId)
 		}
 	}
-}
-
-func (c *client) getInProgressAds() map[string]Ad {
-	c.lock.RLock()
-	defer c.lock.RUnlock()
-
-	ads := make(map[string]Ad)
-	for id, ad := range c.inProgressAds {
-		ads[id] = ad
-	}
-	return ads
 }
