@@ -391,3 +391,61 @@ func TestGetAdReturnsAd(t *testing.T) {
 	assert.Equal(t, resp, adResponse)
 	assert.Empty(t, err)
 }
+
+func TestStopClient(t *testing.T) {
+	ad1 := map[string]interface{}{
+		"id":           "1",
+		"asset_url":    "url1",
+		"lease_expiry": float64(12345),
+	}
+	ad2 := map[string]interface{}{
+		"id":           "2",
+		"asset_url":    "url2",
+		"lease_expiry": float64(time.Now().Unix() + int64(1)),
+	}
+
+	inProgressAds := make(map[string]Ad)
+	inProgressAds[ad1["id"].(string)] = ad1
+	inProgressAds[ad2["id"].(string)] = ad2
+
+	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
+		time.Millisecond*50)
+	client.inProgressAds = inProgressAds
+
+	ads := client.getInProgressAds()
+	assert.Equal(t, len(ads), 2)
+
+	time.Sleep(20 * time.Millisecond)
+
+	ads = client.getInProgressAds()
+	assert.Equal(t, len(ads), 2)
+	assert.Contains(t, ads, ad1["id"].(string))
+	assert.Contains(t, ads, ad2["id"].(string))
+
+	// processExpiredAds timer will be active.
+	time.Sleep(40 * time.Millisecond)
+
+	ads = client.getInProgressAds()
+	assert.Equal(t, len(ads), 1)
+	assert.NotContains(t, ads, ad1["id"].(string))
+	assert.Contains(t, ads, ad2["id"].(string))
+
+	// Close the client. This should stop the processExpiredAds() goroutine.
+	client.Close()
+
+	// processExpiredAds timer should not be active.
+	time.Sleep(40 * time.Millisecond)
+
+	ads = client.getInProgressAds()
+	assert.Equal(t, len(ads), 1)
+	assert.NotContains(t, ads, ad1["id"].(string))
+	assert.Contains(t, ads, ad2["id"].(string))
+
+	// processExpiredAds timer should not be active.
+	time.Sleep(1000 * time.Millisecond)
+
+	ads = client.getInProgressAds()
+	assert.Equal(t, len(ads), 1)
+	assert.NotContains(t, ads, ad1["id"].(string))
+	assert.Contains(t, ads, ad2["id"].(string))
+}

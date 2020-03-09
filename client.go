@@ -39,15 +39,38 @@ type Client interface {
 }
 
 type client struct {
-	httpClient     *http.Client
-	pop            ProofOfPlay
-	assetTTL       time.Duration
-	cacheFn        CacheFunc
-	eventFn        EventFunc
-	lock           sync.RWMutex
-	inProgressAds  map[string]Ad
-	statsLock      sync.RWMutex
-	bandwidthStats map[string]Stats
+	httpClient       *http.Client
+	pop              ProofOfPlay
+	assetTTL         time.Duration
+	cacheFn          CacheFunc
+	eventFn          EventFunc
+	lock             sync.RWMutex
+	inProgressAds    map[string]Ad
+	statsLock        sync.RWMutex
+	bandwidthStats   map[string]Stats
+	closeCh          chan struct{}
+	adExpiryInterval time.Duration
+}
+
+func NewClientForTesting(reqTimeout time.Duration, eventFn EventFunc,
+	cacheFn CacheFunc, assetTTL time.Duration,
+	expiryInterval time.Duration) *client {
+	httpClient := &http.Client{Timeout: reqTimeout}
+	pop := NewProofOfPlay(eventFn)
+	c := &client{
+		pop:              pop,
+		assetTTL:         assetTTL,
+		httpClient:       httpClient,
+		eventFn:          eventFn,
+		cacheFn:          cacheFn,
+		inProgressAds:    make(map[string]Ad),
+		bandwidthStats:   make(map[string]Stats),
+		closeCh:          make(chan struct{}, 1),
+		adExpiryInterval: expiryInterval,
+	}
+
+	go c.processExpiredAds()
+	return c
 }
 
 func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
@@ -55,13 +78,15 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 	httpClient := &http.Client{Timeout: reqTimeout}
 	pop := NewProofOfPlay(eventFn)
 	c := &client{
-		pop:            pop,
-		assetTTL:       assetTTL,
-		httpClient:     httpClient,
-		eventFn:        eventFn,
-		cacheFn:        cacheFn,
-		inProgressAds:  make(map[string]Ad),
-		bandwidthStats: make(map[string]Stats),
+		pop:              pop,
+		assetTTL:         assetTTL,
+		httpClient:       httpClient,
+		eventFn:          eventFn,
+		cacheFn:          cacheFn,
+		inProgressAds:    make(map[string]Ad),
+		bandwidthStats:   make(map[string]Stats),
+		closeCh:          make(chan struct{}, 1),
+		adExpiryInterval: ProcessExpiredAdInterval,
 	}
 
 	go c.processExpiredAds()
@@ -70,6 +95,7 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 
 func (c *client) Close() {
 	c.pop.Stop()
+	c.closeCh <- struct{}{}
 }
 
 func (c *client) GetStats() map[string]Stats {
@@ -273,10 +299,15 @@ func (c *client) updateBandwidthStats(url string, sentBytes int64,
 }
 
 func (c *client) processExpiredAds() {
-	ticker := time.NewTicker(ProcessExpiredAdInterval)
+	ticker := time.NewTicker(c.adExpiryInterval)
 
-	for range ticker.C {
-		c.removeExpiredAds()
+	for {
+		select {
+		case <-ticker.C:
+			c.removeExpiredAds()
+		case <-c.closeCh:
+			return
+		}
 	}
 }
 
@@ -292,8 +323,19 @@ func (c *client) removeExpiredAds() {
 
 		// We are dropping the expired ad here and not expiring,
 		// because ad server expires them automatically after 24hrs.
-		if int64(leaseExpirySecond.(float64)) < time.Now().Unix() {
+		if int64(leaseExpirySecond.(float64)) <= time.Now().Unix() {
 			delete(c.inProgressAds, adId)
 		}
 	}
+}
+
+func (c *client) getInProgressAds() map[string]Ad {
+	c.lock.RLock()
+	defer c.lock.RUnlock()
+
+	ads := make(map[string]Ad)
+	for id, ad := range c.inProgressAds {
+		ads[id] = ad
+	}
+	return ads
 }
