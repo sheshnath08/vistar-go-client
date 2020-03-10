@@ -358,7 +358,7 @@ func TestGetAdReturnsAd(t *testing.T) {
 	adResponse := &AdResponse{
 		[]Ad{
 			{
-				"id":        float64(1),
+				"id":        "1",
 				"asset-url": "asset-url.ad-server.com",
 			},
 		},
@@ -378,18 +378,75 @@ func TestGetAdReturnsAd(t *testing.T) {
 		url:  ts.URL,
 		data: data,
 	}
-	pop := NewTestProofOfPlay()
-	client := &client{
-		pop:            pop,
-		httpClient:     ts.Client(),
-		bandwidthStats: make(map[string]Stats),
-	}
+	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
+		time.Millisecond*50)
 
 	resp, err := client.GetAd(request)
 
 	assert.NotEmpty(t, resp)
 	assert.Equal(t, resp, adResponse)
 	assert.Empty(t, err)
+
+	assert.Equal(t, len(client.GetInProgressAds()), 1)
+	assert.Equal(t, client.GetInProgressAds(),
+		map[string]Ad{
+			"1": map[string]interface{}{
+				"id": "1", "asset-url": "asset-url.ad-server.com"},
+		},
+	)
+}
+
+func TestGetAdReturnsMultipleAds(t *testing.T) {
+	adResponse := &AdResponse{
+		[]Ad{
+			{
+				"id":        "1",
+				"asset-url": "asset-url.ad-server.com",
+			},
+			{
+				"id":        "2",
+				"asset-url": "asset-url.ad-server.com",
+			},
+			{
+				"id":        "3",
+				"asset-url": "asset-url.ad-server.com",
+			},
+		},
+	}
+
+	ts := httptest.NewServer(
+		http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusOK)
+			response, _ := json.Marshal(adResponse)
+			w.Write(response)
+		}),
+	)
+	defer ts.Close()
+
+	data := &Data{}
+	request := &request{
+		url:  ts.URL,
+		data: data,
+	}
+	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
+		time.Millisecond*50)
+
+	resp, err := client.GetAd(request)
+
+	assert.NotEmpty(t, resp)
+	assert.Equal(t, resp, adResponse)
+	assert.Empty(t, err)
+
+	assert.Equal(t, len(client.GetInProgressAds()), 3)
+	assert.Equal(t, client.GetInProgressAds(),
+		map[string]Ad{
+			"1": map[string]interface{}{
+				"id": "1", "asset-url": "asset-url.ad-server.com"},
+			"2": map[string]interface{}{
+				"id": "2", "asset-url": "asset-url.ad-server.com"},
+			"3": map[string]interface{}{
+				"id": "3", "asset-url": "asset-url.ad-server.com"},
+		})
 }
 
 func TestStopClient(t *testing.T) {
@@ -412,12 +469,12 @@ func TestStopClient(t *testing.T) {
 		time.Millisecond*50)
 	client.inProgressAds = inProgressAds
 
-	ads := client.getInProgressAds()
+	ads := client.GetInProgressAds()
 	assert.Equal(t, len(ads), 2)
 
 	time.Sleep(20 * time.Millisecond)
 
-	ads = client.getInProgressAds()
+	ads = client.GetInProgressAds()
 	assert.Equal(t, len(ads), 2)
 	assert.Contains(t, ads, ad1["id"].(string))
 	assert.Contains(t, ads, ad2["id"].(string))
@@ -425,7 +482,7 @@ func TestStopClient(t *testing.T) {
 	// processExpiredAds timer will be active.
 	time.Sleep(40 * time.Millisecond)
 
-	ads = client.getInProgressAds()
+	ads = client.GetInProgressAds()
 	assert.Equal(t, len(ads), 1)
 	assert.NotContains(t, ads, ad1["id"].(string))
 	assert.Contains(t, ads, ad2["id"].(string))
@@ -436,7 +493,7 @@ func TestStopClient(t *testing.T) {
 	// processExpiredAds timer should not be active.
 	time.Sleep(40 * time.Millisecond)
 
-	ads = client.getInProgressAds()
+	ads = client.GetInProgressAds()
 	assert.Equal(t, len(ads), 1)
 	assert.NotContains(t, ads, ad1["id"].(string))
 	assert.Contains(t, ads, ad2["id"].(string))
@@ -444,7 +501,7 @@ func TestStopClient(t *testing.T) {
 	// processExpiredAds timer should not be active.
 	time.Sleep(1000 * time.Millisecond)
 
-	ads = client.getInProgressAds()
+	ads = client.GetInProgressAds()
 	assert.Equal(t, len(ads), 1)
 	assert.NotContains(t, ads, ad1["id"].(string))
 	assert.Contains(t, ads, ad2["id"].(string))
