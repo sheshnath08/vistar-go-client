@@ -38,6 +38,8 @@ type Request interface {
 	ServerUrl() string
 	AssetEndpointUrl() string
 	AssetEndpointDisplayAreas() []DisplayArea
+	LogLevel() int64
+	LogEnabled() bool
 }
 
 type request struct {
@@ -49,22 +51,15 @@ type request struct {
 	url                       string
 }
 
-func NewRequest(url string, data *Data, logEnabled bool,
-	logLevel int64) *request {
+func NewRequest(url string, assetEndpointUrl string, data *Data,
+	logEnabled bool, logLevel int64) *request {
 	return &request{
-		url:        url,
-		data:       data,
-		logEnabled: logEnabled,
-		logLevel:   logLevel,
+		url:              url,
+		assetEndpointUrl: assetEndpointUrl,
+		data:             data,
+		logEnabled:       logEnabled,
+		logLevel:         logLevel,
 	}
-}
-
-func (r *request) SetAssetEndpointUrl(url string) {
-	r.assetEndpointUrl = url
-}
-
-func (r *request) SetAssetEndpointDisplayAreas(displayAreas []DisplayArea) {
-	r.assetEndpointDisplayAreas = displayAreas
 }
 
 func (r request) Data() *Data {
