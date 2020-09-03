@@ -33,7 +33,13 @@ func TestCacheAdsNoCacher(t *testing.T) {
 		},
 	}
 
-	client := NewClient(time.Second*1, nil, nil, time.Minute*1)
+	config := &ClientConfig{
+		reqTimeout: time.Second,
+		eventFn:    nil,
+		cacheFn:    nil,
+		assetTTL:   time.Minute,
+	}
+	client := NewClient(config)
 
 	client.cacheAds(resp)
 
@@ -80,7 +86,13 @@ func TestCacheAds(t *testing.T) {
 			level:   level})
 	}
 
-	client := NewClient(time.Second*1, eventFn, cacheFn, time.Second*1)
+	config := &ClientConfig{
+		reqTimeout: time.Second,
+		eventFn:    eventFn,
+		cacheFn:    cacheFn,
+		assetTTL:   time.Second,
+	}
+	client := NewClient(config)
 
 	cacheError := errors.New("cache failed")
 	cacheEntry := "/cached-url"
@@ -378,8 +390,14 @@ func TestGetAdReturnsAd(t *testing.T) {
 		url:  ts.URL,
 		data: data,
 	}
-	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
-		time.Millisecond*50)
+
+	config := &ClientConfig{
+		reqTimeout: time.Second * 100,
+		eventFn:    nil,
+		cacheFn:    nil,
+		assetTTL:   time.Second * 100,
+	}
+	client := NewClientForTesting(config, time.Millisecond*50)
 
 	resp, err := client.GetAd(request)
 
@@ -428,8 +446,14 @@ func TestGetAdReturnsMultipleAds(t *testing.T) {
 		url:  ts.URL,
 		data: data,
 	}
-	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
-		time.Millisecond*50)
+
+	config := &ClientConfig{
+		reqTimeout: time.Second * 100,
+		eventFn:    nil,
+		cacheFn:    nil,
+		assetTTL:   time.Second * 100,
+	}
+	client := NewClientForTesting(config, time.Millisecond*50)
 
 	resp, err := client.GetAd(request)
 
@@ -465,8 +489,13 @@ func TestStopClient(t *testing.T) {
 	inProgressAds[ad1["id"].(string)] = ad1
 	inProgressAds[ad2["id"].(string)] = ad2
 
-	client := NewClientForTesting(time.Second*100, nil, nil, time.Second*100,
-		time.Millisecond*50)
+	config := &ClientConfig{
+		reqTimeout: time.Second * 100,
+		eventFn:    nil,
+		cacheFn:    nil,
+		assetTTL:   time.Second * 100,
+	}
+	client := NewClientForTesting(config, time.Millisecond*50)
 	client.inProgressAds = inProgressAds
 
 	ads := client.GetInProgressAds()
