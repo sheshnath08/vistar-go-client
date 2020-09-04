@@ -17,6 +17,8 @@ var ProcessExpiredAdInterval = 1 * time.Minute
 
 type CacheFunc func(string, time.Duration) (string, error)
 type EventFunc func(string, string, string, string)
+type PoPFunc func(string, string, *ProofOfPlayRequest) (
+	*http.Response, error)
 
 type Ad map[string]interface{}
 type AdResponse struct {
@@ -38,6 +40,15 @@ type Client interface {
 	Close()
 }
 
+type ClientConfig struct {
+	reqTimeout     time.Duration
+	eventFn        EventFunc
+	cacheFn        CacheFunc
+	assetTTL       time.Duration
+	expiryInterval time.Duration
+	popFunc        PoPFunc
+}
+
 type client struct {
 	httpClient       *http.Client
 	pop              ProofOfPlay
@@ -52,17 +63,17 @@ type client struct {
 	adExpiryInterval time.Duration
 }
 
-func NewClientForTesting(reqTimeout time.Duration, eventFn EventFunc,
-	cacheFn CacheFunc, assetTTL time.Duration,
+func NewClientForTesting(config *ClientConfig,
 	expiryInterval time.Duration) *client {
-	httpClient := &http.Client{Timeout: reqTimeout}
-	pop := NewProofOfPlay(eventFn)
+	httpClient := &http.Client{Timeout: config.reqTimeout}
+	pop := NewProofOfPlay(config.eventFn, config.popFunc)
+
 	c := &client{
 		pop:              pop,
-		assetTTL:         assetTTL,
+		assetTTL:         config.assetTTL,
 		httpClient:       httpClient,
-		eventFn:          eventFn,
-		cacheFn:          cacheFn,
+		eventFn:          config.eventFn,
+		cacheFn:          config.cacheFn,
 		inProgressAds:    make(map[string]Ad),
 		bandwidthStats:   make(map[string]Stats),
 		closeCh:          make(chan struct{}, 1),
@@ -73,16 +84,16 @@ func NewClientForTesting(reqTimeout time.Duration, eventFn EventFunc,
 	return c
 }
 
-func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
-	assetTTL time.Duration) *client {
-	httpClient := &http.Client{Timeout: reqTimeout}
-	pop := NewProofOfPlay(eventFn)
+func NewClient(config *ClientConfig) *client {
+	httpClient := &http.Client{Timeout: config.reqTimeout}
+	pop := NewProofOfPlay(config.eventFn, config.popFunc)
+
 	c := &client{
 		pop:              pop,
-		assetTTL:         assetTTL,
+		assetTTL:         config.assetTTL,
 		httpClient:       httpClient,
-		eventFn:          eventFn,
-		cacheFn:          cacheFn,
+		eventFn:          config.eventFn,
+		cacheFn:          config.cacheFn,
 		inProgressAds:    make(map[string]Ad),
 		bandwidthStats:   make(map[string]Stats),
 		closeCh:          make(chan struct{}, 1),
@@ -94,7 +105,6 @@ func NewClient(reqTimeout time.Duration, eventFn EventFunc, cacheFn CacheFunc,
 }
 
 func (c *client) Close() {
-	c.pop.Stop()
 	c.closeCh <- struct{}{}
 }
 
@@ -102,7 +112,6 @@ func (c *client) GetStats() map[string]Stats {
 	c.statsLock.Lock()
 	defer c.statsLock.Unlock()
 
-	c.bandwidthStats["pop"] = c.pop.GetStats()
 	return c.bandwidthStats
 }
 
